@@ -339,7 +339,7 @@ async function generateAnswer(){
 
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-calls':'true'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',max_tokens:1000,
         system:`You are an interview coach. The candidate is Hank Liao, interviewing for CrowdStrike Corporate Sales Manager, North Asia (SENA). Generate a concise, confident spoken answer based on the candidate's full interview context below.
