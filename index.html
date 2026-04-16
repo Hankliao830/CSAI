@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interview Assistant — CrowdStrike SENA</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+  :root{--bg:#0a0a0f;--surface:#111118;--border:#1e1e2e;--accent:#7fff7f;--accent2:#00cfff;--warn:#ff6b35;--text:#e8e8f0;--muted:#555568;--answer-bg:#0d1a0d;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;display:flex;flex-direction:column}
+  header{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--accent)}.logo span{color:var(--text)}
+  .hdr-right{display:flex;align-items:center;gap:12px}
+  .status-bar{display:flex;align-items:center;gap:6px;font-size:0.7rem;color:var(--muted)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .3s}
+  .dot.live{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1.5s infinite}
+  .dot.thinking{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse .8s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .lang-toggle{display:flex;gap:3px;background:var(--border);border-radius:6px;padding:3px}
+  .lang-btn{padding:3px 9px;border-radius:4px;border:none;background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.7rem;cursor:pointer;transition:all .2s}
+  .lang-btn.active{background:var(--accent);color:#000;font-weight:500}
+  main{flex:1;display:grid;grid-template-columns:360px 1fr;height:calc(100vh - 49px);overflow:hidden}
+  .left-panel{border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);overflow:hidden}
+  .panel-label{font-size:0.62rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;padding:10px 16px 8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .plan-area{flex:1;padding:12px 16px;background:transparent;border:none;color:var(--text);font-family:'DM Mono',monospace;font-size:0.72rem;line-height:1.75;resize:none;outline:none;overflow-y:auto}
+  .plan-area::-webkit-scrollbar{width:3px}.plan-area::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  .loaded-badge{background:rgba(127,255,127,.12);color:var(--accent);border:1px solid rgba(127,255,127,.25);border-radius:4px;font-size:.58rem;padding:2px 7px;letter-spacing:.06em}
+  .right-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+  .question-section{border-bottom:1px solid var(--border);padding:18px 24px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
+  .sec-header{display:flex;align-items:center;justify-content:space-between}
+  .sec-label{font-size:.62rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .mic-big{width:100%;padding:18px 16px;border-radius:12px;border:2px solid #2a2a3e;background:transparent;color:var(--text);font-family:'DM Mono',monospace;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;transition:all .2s}
+  .mic-big.recording{border-color:#ff6b35;color:#ff6b35;background:rgba(255,107,53,.08);animation:bpulse 1.5s infinite}
+  @keyframes bpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,53,.4)}50%{box-shadow:0 0 0 8px rgba(255,107,53,0)}}
+  .mic-hint{text-align:center;font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:.02em}
+  .mic-hint.rec{color:#ff6b35}
+  .q-display{margin-top:4px;padding:10px 14px;background:#0d0d18;border-radius:8px;border:1px solid var(--border);font-size:16px;font-weight:700;line-height:1.4;font-family:'Syne',sans-serif;min-height:44px;color:var(--text)}
+  .q-display.ph{color:var(--muted);font-weight:400;font-size:13px;font-family:'DM Mono',monospace}
+  .q-input-row{display:flex;gap:7px}
+  .q-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:.78rem;outline:none;transition:border-color .2s}
+  .q-input:focus{border-color:var(--accent2)}.q-input::placeholder{color:var(--muted)}
+  .ask-btn{padding:9px 16px;border-radius:8px;border:none;background:var(--accent2);color:#000;font-family:'DM Mono',monospace;font-size:.74rem;font-weight:700;cursor:pointer;transition:opacity .2s;white-space:nowrap}
+  .ask-btn:disabled{opacity:.4;cursor:not-allowed}
+  .answer-section{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:18px 24px;gap:12px}
+  .ans-label-row{display:flex;align-items:center;justify-content:space-between}
+  .ans-controls{display:flex;gap:5px;align-items:center}
+  .copy-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:.63rem;cursor:pointer;transition:all .2s}
+  .copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .font-btn{width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Syne',sans-serif;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .answer-box{flex:1;background:var(--answer-bg);border:1px solid #1a2e1a;border-radius:12px;padding:22px 26px;overflow-y:auto}
+  .answer-box::-webkit-scrollbar{width:3px}.answer-box::-webkit-scrollbar-thumb{background:#1a2e1a;border-radius:2px}
+  .answer-text{font-family:'Syne',sans-serif;font-size:1.38rem;font-weight:700;line-height:1.65;color:var(--accent);letter-spacing:-.01em}
+  .answer-ph{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);line-height:2}
+  .thinking-anim{display:flex;align-items:center;gap:6px;color:var(--accent2);font-size:.76rem}
+  .dots span{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent2);animation:bounce 1.2s infinite;margin:0 1px}
+  .dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .history-strip{display:flex;gap:7px;padding:8px 24px;border-top:1px solid var(--border);overflow-x:auto;background:var(--surface);min-height:42px}
+  .history-strip::-webkit-scrollbar{height:2px}.history-strip::-webkit-scrollbar-thumb{background:var(--border)}
+  .h-chip{white-space:nowrap;padding:4px 11px;border-radius:20px;border:1px solid var(--border);font-size:.63rem;color:var(--muted);cursor:pointer;transition:all .15s;flex-shrink:0;background:transparent;font-family:'DM Mono',monospace}
+  .h-chip:hover{border-color:var(--accent2);color:var(--accent2)}
+  .error-msg{color:var(--warn);font-size:.73rem;padding:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">interview<span>AI</span>&nbsp;<span style="font-size:.6rem;color:var(--muted);font-weight:400">· CrowdStrike SENA</span></div>
+  <div class="hdr-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('en')" id="lang-en">EN</button>
+      <button class="lang-btn" onclick="setLang('zh')" id="lang-zh">中文</button>
+      <button class="lang-btn" onclick="setLang('both')" id="lang-both">Both</button>
+    </div>
+    <div class="status-bar"><div class="dot" id="sdot"></div><span id="stxt">ready</span></div>
+  </div>
+</header>
+<main>
+  <div class="left-panel">
+    <div class="panel-label">Full Interview Context <span class="loaded-badge">✓ Loaded</span></div>
+    <textarea class="plan-area" id="plan-input"></textarea>
+  </div>
+  <div class="right-panel">
+    <div class="question-section">
+      <button class="mic-big" id="mic-btn" onclick="toggleMic()">
+        <span style="font-size:26px" id="mic-icon">🎙</span>
+        <span id="mic-label">START — Press before they speak</span>
+      </button>
+      <div class="mic-hint" id="mic-hint">① START before they ask &nbsp;·&nbsp; ② listen &nbsp;·&nbsp; ③ STOP to generate answer</div>
+      <div class="q-display ph" id="qdisplay">Question will appear here while listening...</div>
+      <div class="q-input-row">
+        <input class="q-input" id="qinput" type="text" placeholder="Or type question manually..." onkeydown="handleEnter(event)"/>
+        <button class="ask-btn" id="ask-btn" onclick="generateAnswer()">Generate →</button>
+      </div>
+      <div class="error-msg" id="errmsg" style="display:none"></div>
+    </div>
+    <div class="answer-section">
+      <div class="ans-label-row">
+        <span class="sec-label">Your Answer — Read Aloud</span>
+        <div class="ans-controls">
+          <button class="font-btn" onclick="changeFontSize(-1)">A-</button>
+          <button class="font-btn" onclick="changeFontSize(1)">A+</button>
+          <button class="copy-btn" id="copybtn" onclick="copyAnswer()">Copy</button>
+        </div>
+      </div>
+      <div class="answer-box">
+        <div class="answer-ph" id="aph">
+          ① Plan + Hank Liao + Why CS all loaded ✓<br>
+          ② Press <span style="color:var(--accent2)">START</span> before interviewer speaks<br>
+          ③ Press <span style="color:var(--warn)">STOP</span> when they finish → answer appears<br>
+          ④ Read aloud 📢 &nbsp;·&nbsp; A+/A- to resize
+        </div>
+        <div class="answer-text" id="atxt" style="display:none"></div>
+        <div class="thinking-anim" id="thinking" style="display:none">Generating<div class="dots"><span></span><span></span><span></span></div></div>
+      </div>
+    </div>
+    <div class="history-strip" id="hstrip"></div>
+  </div>
+</main>
+<script>
+const PLAN = `=== WHO IS HANK LIAO — Value Proposition ===
+
+SUBTITLE: Built from the Ground Up · Ready from Day One
+
+VISION: Make CrowdStrike a truly mature vendor in Taiwan — across product, service, and partner ecosystem
+
+STRENGTH & INSTINCT (Channel & Commercial):
+- Build Repeatable Growth
+- Leverage the Right Partners
+- Lead with Execution Discipline
+- Proven ability to execute and scale business across Taiwan, HK & Korea
+
+DAY-ONE CONTRIBUTIONS (Immediate Impact at CrowdStrike):
+- Deep understanding of Taiwan distys & key partner landscape
+- No warm-up period needed — I can start meaningful conversations with key partners and the distributor from Day One
+- Strengthen Taiwan as core growth engine for North Asia
+- Build a more scalable, structured partner ecosystem
+
+SCALING ACROSS NORTH ASIA (Regional Value):
+- Scale Taiwan's success model to Hong Kong & Korea
+- Build a repeatable GTM motion across North Asia
+- Drive consistent and predictable growth
+
+KEY DIFFERENTIATOR:
+"I've seen Taiwan's cybersecurity channel from every angle — as a reseller, as a regional account manager, as a channel manager, and as a vendor. That's not a common combination."
+
+=== WHY CROWDSTRIKE? ===
+
+SUBTITLE: Right Product, Right Timing, Right Opportunity
+
+MARKET DIRECTION — Aligned with Market Direction:
+- Security is shifting from point solutions to platform-based architecture
+- CrowdStrike is positioned as a true security platform, not just a product
+
+PRODUCT & TIMING — Right Product, Right Timing:
+- Strong in endpoint, identity, and cloud security convergence
+- Increasing need for simplified and integrated security stacks
+
+UNTAPPED POTENTIAL IN TAIWAN — The Gap is the Opportunity:
+- Strong product and brand, but partner-driven growth is not fully unlocked
+- Room to expand partner engagement depth and improve channel scalability
+
+MY PERSPECTIVE & OPPORTUNITY:
+- I understand the current disty and key partner landscape
+- Clear opportunities to strengthen partner activation & GTM execution
+- "The gap is not the product — it's how we scale through partners. And that's exactly what I've been building toward."
+
+=== PHASE 1 — 30 DAYS: Learn, Listen, and Prioritize ===
+
+PRIORITY 1: Market Reality — Ground Truth from Taiwan Outward
+- Build Top Accounts Map — Enterprise/Commercial segmentation $10K-$250K
+- Identify top revenue-driving partners & key SI
+- Validate pipeline vs. actual deal status (not just CRM)
+- Assess current GTM vs. real execution gaps
+KEY MESSAGE: "I don't rely only on CRM — I validate the business directly with partners and key customers to understand what's real."
+
+PRIORITY 2: Partner Mapping — Identify Who Truly Drives the Business
+- Map top 5-8 partners per market: revenue history, deal involvement, engagement quality
+- Categorize: Strategic / Tactical / Dormant
+- Identify gaps: underserved segments, untapped accounts
+KEY MESSAGE: "Not all partners are equal. I focus on the ones who can actually help us close deals and build pipeline."
+
+PRIORITY 3: Deal Validation — Focus on Real, Closeable Opportunities
+- Review all active pipeline: confirm deal stage, decision makers, true next steps
+- Qualify against MEDDIC-style criteria
+- Identify top 3-5 closeable deals per market for early wins
+KEY MESSAGE: "Pipeline that can't close isn't pipeline — it's noise. I focus energy where we can win."
+
+REGIONAL (30 Days):
+Taiwan: Pipeline validation & account mapping — validate active opps, confirm deal stages, separate real from noise
+Hong Kong: Deal qualification & quick-win identification — urgency/budget/process, find short-cycle wins for early momentum
+Korea: Partner landscape assessment & GTM alignment — identify truly active partners, align on focused GTM motion
+
+=== PHASE 2 — 60 DAYS: Focus, Activate, Accelerate ===
+
+PRIORITY 1: Focus — Strategic Account Prioritization
+- Finalize top account target list per market (Tier 1/Tier 2)
+- Align with SE and channel team on account coverage model
+- Dedicate 70% of selling time to highest-potential accounts
+KEY MESSAGE: "Trying to win everywhere means winning nowhere. At 60 days, I know exactly where to play and why."
+
+PRIORITY 2: Activate — Partner Co-Selling Engine
+- Activate 3-5 key partners per market for co-selling
+- Launch joint account planning sessions
+- Track partner-sourced vs. partner-influenced pipeline separately
+KEY MESSAGE: "Strategy without activation is just a slide. At 60 days, I have partners actively co-selling with me."
+
+PRIORITY 3: Accelerate — Pipeline Velocity & Deal Execution
+- Weekly deal review cadence: inspect, unblock, advance
+- Push clear next steps on every deal — no stale opportunities
+- Begin formal forecast discipline: commit/upside/pipeline tiers
+KEY MESSAGE: "Speed matters — but only on the right deals. I accelerate what's real and cut what's not."
+
+REGIONAL (60 Days):
+Taiwan: Weekly pipeline review & partner co-selling — remove blockers, accelerate expansion deals with partners
+Hong Kong: Deal acceleration & fast-cycle execution — push next steps, tight timelines, convert pipeline to revenue quickly
+Korea: Partner activation & structured pipeline build — move from understanding to execution with right partners
+
+=== PHASE 3 — 90 DAYS: Scale, Predict, Build ===
+
+PRIORITY 1: Scale Growth — Replicate Proven Plays
+- Scale successful expansion plays and partner/SI engagement models
+- Develop standardized sales playbook
+- Replicate winning motions across Taiwan, Hong Kong, and Korea
+KEY MESSAGE: "Success should not be isolated — it must be repeatable and scalable."
+
+PRIORITY 2: Predict Revenue — Build Forecast Consistency
+- Establish consistent weekly forecast cadence with leadership
+- Build pipeline coverage ratio targets (3x pipeline to quota)
+- Create visibility dashboards: pipeline by stage, market, partner
+KEY MESSAGE: "Forecasting isn't admin work — it's how you earn trust upward. By 90 days, my forecast is reliable."
+
+PRIORITY 3: Build Engine — Develop Team & Operating Rhythm
+- Document winning sales motions and partner engagement models
+- Establish clear operating cadence: weekly/monthly/quarterly reviews
+- Build a repeatable GTM model that doesn't depend on heroics
+KEY MESSAGE: "Revenue without a repeatable engine is just luck. I build systems that scale."
+
+REGIONAL (90 Days):
+Taiwan: Forecast discipline & scalable expansion model — most mature execution model, export playbooks to HK and Korea
+Hong Kong: Win-rate optimization & deal predictability — consistent closure rhythm, predictable monthly revenue
+Korea: Scalable GTM execution & long-term pipeline growth — 3-5 strategic deals late-stage, CrowdStrike as preferred vendor
+
+CLOSING STATEMENT: "By 90 days, my goal is to move from execution to scale — building a repeatable GTM model, a predictable pipeline, and a team that can consistently deliver results across North Asia."`;
+
+let currentLang='en', recognition=null, isRecording=false;
+let currentAnswer='', hist=[], fontSize=1.38;
+let accRef='';
+
+document.getElementById('plan-input').value = PLAN;
+
+function setLang(l){
+  currentLang=l;
+  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('lang-'+(l==='both'?'both':l)).classList.add('active');
+}
+
+function toggleMic(){
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
+    showError('Speech recognition requires Chrome. Please type manually.');return;
+  }
+  isRecording ? stopAndGenerate() : startMic();
+}
+
+function startMic(){
+  accRef='';
+  document.getElementById('qdisplay').textContent='Listening...';
+  document.getElementById('qdisplay').className='q-display ph';
+  document.getElementById('atxt').style.display='none';
+  document.getElementById('aph').style.display='block';
+  clearError();
+
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();
+  recognition.lang='en-US';recognition.continuous=true;recognition.interimResults=true;
+
+  recognition.onresult=(e)=>{
+    let fin=accRef, interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++)
+      e.results[i].isFinal?(fin+=e.results[i][0].transcript+' '):(interim+=e.results[i][0].transcript);
+    accRef=fin;
+    const q=(fin+interim).trim();
+    if(q){const d=document.getElementById('qdisplay');d.textContent=q;d.className='q-display';}
+  };
+  recognition.onerror=(e)=>{if(e.error!=='no-speech'){showError('Mic error: '+e.error);resetMicUI();}};
+  recognition.onend=()=>{if(isRecording)try{recognition.start();}catch(_){}};
+  recognition.start();
+
+  isRecording=true;
+  setStatus('live','listening...');
+  const btn=document.getElementById('mic-btn');
+  btn.classList.add('recording');
+  document.getElementById('mic-icon').textContent='⏹';
+  document.getElementById('mic-label').textContent='STOP — Done listening';
+  document.getElementById('mic-hint').textContent='🔴 Listening... press STOP when interviewer finishes';
+  document.getElementById('mic-hint').className='mic-hint rec';
+}
+
+function stopAndGenerate(){
+  isRecording=false;
+  if(recognition){recognition.onend=null;recognition.stop();}
+  resetMicUI();
+  const q=accRef.trim()||document.getElementById('qdisplay').textContent.trim();
+  if(q&&q!=='Listening...'&&q!=='Question will appear here while listening...'){
+    document.getElementById('qinput').value=q;
+    generateAnswer();
+  } else {
+    showError('No question detected. Please try again or type manually.');
+  }
+}
+
+function resetMicUI(){
+  setStatus('','ready');
+  document.getElementById('mic-btn').classList.remove('recording');
+  document.getElementById('mic-icon').textContent='🎙';
+  document.getElementById('mic-label').textContent='START — Press before they speak';
+  document.getElementById('mic-hint').textContent='① START before they ask · ② listen · ③ STOP to generate answer';
+  document.getElementById('mic-hint').className='mic-hint';
+}
+
+function handleEnter(e){
+  if(e.key==='Enter'){
+    const q=document.getElementById('qinput').value.trim();
+    if(q){document.getElementById('qdisplay').textContent=q;document.getElementById('qdisplay').className='q-display';generateAnswer();}
+  }
+}
+
+async function generateAnswer(){
+  const plan=document.getElementById('plan-input').value.trim();
+  const question=document.getElementById('qinput').value.trim()||accRef.trim();
+  if(!question){showError('Please provide a question first.');return;}
+
+  setStatus('thinking','generating...');showThinking(true);
+  document.getElementById('ask-btn').disabled=true;clearError();
+
+  const li=currentLang==='en'?'Respond entirely in English.'
+    :currentLang==='zh'?'Respond entirely in Traditional Chinese (繁體中文).'
+    :'English first, then the same answer in Traditional Chinese below.';
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:1000,
+        system:`You are an interview coach. The candidate is Hank Liao, interviewing for CrowdStrike Corporate Sales Manager, North Asia (SENA). Generate a concise, confident spoken answer based on the candidate's full interview context below.
+
+Rules:
+- Always answer as Hank Liao in first person
+- 3-5 sentences max — natural spoken prose, easy to read aloud
+- Ground every point in the actual context provided
+- ${li}
+- No headers, no bullets, no markdown
+- For questions about background/who you are → draw from the Hank Liao / Value Proposition section
+- For questions about why CrowdStrike → draw from the Why CrowdStrike section  
+- For questions about the plan → draw from the 30/60/90 sections
+
+Full Interview Context:
+${plan}`,
+        messages:[{role:'user',content:`Interviewer's question: "${question}"`}]
+      })
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const ans=data.content?.find(b=>b.type==='text')?.text||'';
+    currentAnswer=ans;
+    showAnswer(ans);
+    hist=[{q:question,a:ans},...hist].slice(0,6);
+    renderHistory();
+    setStatus('','ready');
+  }catch(err){showError('Error: '+err.message);setStatus('','error');}
+
+  showThinking(false);document.getElementById('ask-btn').disabled=false;
+}
+
+function showAnswer(text){
+  document.getElementById('aph').style.display='none';
+  const el=document.getElementById('atxt');el.style.display='block';el.textContent='';
+  let i=0;(function t(){if(i<text.length){el.textContent+=text[i++];setTimeout(t,15);}})();
+}
+function showThinking(s){
+  document.getElementById('thinking').style.display=s?'flex':'none';
+  if(s)document.getElementById('atxt').style.display='none';
+}
+function clearError(){const e=document.getElementById('errmsg');e.style.display='none';e.textContent='';}
+function showError(m){const e=document.getElementById('errmsg');e.textContent=m;e.style.display='block';showThinking(false);setStatus('','error');}
+function setStatus(type,text){document.getElementById('sdot').className='dot'+(type?' '+type:'');document.getElementById('stxt').textContent=text;}
+function copyAnswer(){
+  if(!currentAnswer)return;
+  navigator.clipboard.writeText(currentAnswer).then(()=>{
+    const b=document.getElementById('copybtn');b.textContent='✓ Copied';setTimeout(()=>b.textContent='Copy',1800);
+  });
+}
+function changeFontSize(d){fontSize=Math.max(.9,Math.min(2.8,fontSize+d*.13));document.getElementById('atxt').style.fontSize=fontSize+'rem';}
+function renderHistory(){document.getElementById('hstrip').innerHTML=hist.map((item,i)=>`<button class="h-chip" onclick="loadHistory(${i})">${item.q.length>35?item.q.slice(0,33)+'…':item.q}</button>`).join('');}
+function loadHistory(i){const item=hist[i];currentAnswer=item.a;document.getElementById('qdisplay').textContent=item.q;document.getElementById('qdisplay').className='q-display';document.getElementById('qinput').value=item.q;showAnswer(item.a);}
+</script>
+</body>
+</html>
