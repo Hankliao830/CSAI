@@ -235,10 +235,70 @@ async function renderPDF(file){
   return canvas;
 }
 
+// Preprocess image for better OCR on gold-on-black labels
+function preprocessForOCR(source){
+  const tmpCanvas = document.createElement('canvas');
+  let img;
+  if(source instanceof HTMLCanvasElement){
+    tmpCanvas.width = source.width;
+    tmpCanvas.height = source.height;
+    tmpCanvas.getContext('2d').drawImage(source,0,0);
+  } else {
+    // It's a URL - draw to canvas first
+    return source; // fallback, handle async below
+  }
+  const ctx = tmpCanvas.getContext('2d');
+  const imgData = ctx.getImageData(0,0,tmpCanvas.width,tmpCanvas.height);
+  const d = imgData.data;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    // Detect gold/bright pixels on dark background
+    // Gold: high R, medium G, low B; or just generally bright
+    const brightness = (r*0.299 + g*0.587 + b*0.114);
+    if(brightness > 80){
+      d[i]=0; d[i+1]=0; d[i+2]=0; d[i+3]=255; // black text
+    } else {
+      d[i]=255; d[i+1]=255; d[i+2]=255; d[i+3]=255; // white bg
+    }
+  }
+  ctx.putImageData(imgData,0,0);
+  return tmpCanvas;
+}
+
+async function preprocessURL(url){
+  return new Promise(res=>{
+    const img = new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>{
+      const c=document.createElement('canvas');
+      c.width=img.naturalWidth; c.height=img.naturalHeight;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0);
+      const imgData=ctx.getImageData(0,0,c.width,c.height);
+      const d=imgData.data;
+      for(let i=0;i<d.length;i+=4){
+        const brightness=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114);
+        if(brightness>80){d[i]=0;d[i+1]=0;d[i+2]=0;d[i+3]=255;}
+        else{d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=255;}
+      }
+      ctx.putImageData(imgData,0,0);
+      res(c);
+    };
+    img.onerror=()=>res(url);
+    img.src=url;
+  });
+}
+
 // OCR
 async function ocr(source, label){
   setP(undefined, `OCR 辨識${label}文字中...`);
-  const result = await Tesseract.recognize(source,['chi_tra','eng'],{
+  let processedSource;
+  if(typeof source === 'string'){
+    processedSource = await preprocessURL(source);
+  } else {
+    processedSource = preprocessForOCR(source);
+  }
+  const result = await Tesseract.recognize(processedSource,['chi_tra','eng'],{
     logger:m=>{if(m.status==='recognizing text') setP(undefined,`OCR ${label}：${Math.round(m.progress*100)}%`);}
   });
   return result.data.text;
