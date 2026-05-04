@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EPS × PDF 校稿工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{--ink:#1a1410;--paper:#f5f0e8;--gold:#b8860b;--gl:#d4a843;--red:#c0392b;--green:#2d6a4f;--amber:#d97706;--border:#c8b89a;--card:#fdfaf4}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -29,8 +31,12 @@
   .btn:disabled{background:#c8b89a;color:#f5f0e8;cursor:not-allowed}
   .prog-wrap{background:#e8dfc8;border-radius:2px;height:4px;margin-bottom:8px;overflow:hidden;display:none}
   .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gl));width:0%;transition:width .4s}
-  .status{text-align:center;font-size:.8rem;color:#7a6a5a;margin-bottom:14px;min-height:18px;line-height:1.5}
+  .status{text-align:center;font-size:.8rem;color:#7a6a5a;margin-bottom:14px;min-height:18px;line-height:1.6}
   .status.err{color:var(--red)}
+  .previews{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .pbox{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+  .ptitle{background:var(--ink);color:var(--gl);font-size:.7rem;font-weight:600;letter-spacing:.1em;padding:6px 12px}
+  .pimg{width:100%;height:160px;object-fit:contain;background:#1a1410;display:block}
   .verdict{text-align:center;padding:13px;border-radius:4px;margin-bottom:16px;font-weight:600;font-size:.88rem;letter-spacing:.06em}
   .v-pass{background:#d1fae5;color:var(--green);border:1px solid #6ee7b7}
   .v-warn{background:#fef3c7;color:var(--amber);border:1px solid #fcd34d}
@@ -53,13 +59,13 @@
   .diff-col-lbl{font-size:.63rem;font-weight:600;color:#7a6a5a;margin-bottom:2px;font-family:inherit}
   .empty{text-align:center;padding:36px 20px;color:#9a8a7a;font-size:.84rem}
   .empty .ico{font-size:2.4rem;display:block;margin-bottom:10px;opacity:.3}
-  @media(max-width:480px){.grid2,.diff-cols{grid-template-columns:1fr}}
+  @media(max-width:480px){.grid2,.previews,.diff-cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
   <h1>EPS <span>×</span> PDF 校稿工具</h1>
-  <p class="sub">上傳兩份檔案，自動比對差異</p>
+  <p class="sub">自動比對差異 · 送印前最後把關</p>
 </header>
 <div class="wrap">
   <div class="grid2">
@@ -83,14 +89,20 @@
   <div class="prog-wrap" id="pw"><div class="prog-fill" id="pf"></div></div>
   <div class="status" id="st"></div>
   <button class="btn" id="btn" disabled onclick="run()">▶ 開始比對校稿</button>
+  <div class="previews" id="prevs" style="display:none">
+    <div class="pbox"><div class="ptitle">EPS 預覽</div><img class="pimg" id="eprev"></div>
+    <div class="pbox"><div class="ptitle">PDF 預覽</div><canvas class="pimg" id="pprev"></canvas></div>
+  </div>
   <div id="results"></div>
   <div class="empty" id="empty"><span class="ico">🔍</span>上傳兩份檔案後點擊比對</div>
 </div>
 <script>
-// ★ 部署後把這裡改成你的 Render 網址
-const API = 'https://eps-pdf-proofer.onrender.com';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const CC_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNGZlMGZmNjg1OTg2MjVhNzhiOWYxYzAwZTZhMGVjMDhlZjliNzU0ZjM3NjY4ODkyOTAyN2QzNDhhMjZkOTAxMTYyYThlMmI3ZmJmMjQ4MjMiLCJpYXQiOjE3Nzc4OTkxODAuNTAwOTgzLCJuYmYiOjE3Nzc4OTkxODAuNTAwOTg1LCJleHAiOjQ5MzM1NzI3ODAuNDkzNTg4LCJzdWIiOiI3NTM5ODYyNSIsInNjb3BlcyI6WyJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIl19.RP7R-vPvJbvZvB0dJdH6ZEbIgtRVtN9LmCxIrEop3e6Sc56pzF0gHKqoscuL6P88FNOkUBzA-v168k6QT5kQMtq7K3DY-pHiPWdxGwEjzzIoZN2pIy7aVFVWXB-AzQpnmGuH-pZ5W0SLlXHX566KezZCwU7awkxahZt8y2DUF929JEbK-RrVW9UhHdb1jdz85q2kTypEWZQ9Zk9hO6HTnFekR5hbN4wzc3pMDHXiG_mL7R30gnnrFDjvwYAItUIB46NVTpqnKkOLcSmZT6_mNJ7Q9tcte77McQ2lcrVhoVRpNRS4FVfbvPKlSwf3Esc8CjXNDclTk206kO1Xav2F4LC-Umvpp2umK4GX14fXTMdZrUSduxWfV-Zk8pr_TP1aqNKjTnaxaxmbVh_UIxLzaTyS5vfA4aDWpAV2vQJvDIj10or1HnATfoyVH_qlvOzy5KeLOPTdzvgJD1vU-FlU4-oB3zQqAsyyMtP2gCOt0ihd9G9AAdrbEB1_O43CVrlrQIpgzywzDXqSpyqeBM42zyfZg1SEmVss2mHk9nqKLcXopZP_Cc19IKWNT1INfRbDX-joON5tmRQVE6x35jfVhGx7qlJcEPWk_RjdqehSmhCLX9qCdA9VwJSd-H6kB02cjFlFU5uy1enf4lp5UeGuep3n5b0rxq80PCZZfz2UXoo';
 
 let epsFile=null, pdfFile=null;
+
 function setup(ii,zi,ni,type){
   const inp=document.getElementById(ii);
   const zone=document.getElementById(zi);
@@ -110,30 +122,166 @@ function setP(pct,txt){
   document.getElementById('pf').style.width=pct+'%';
   if(txt!==undefined){const s=document.getElementById('st');s.textContent=txt;s.className='status';}
 }
-function setErr(txt){const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';document.getElementById('pw').style.display='none';}
+function setErr(txt){
+  const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';
+  document.getElementById('pw').style.display='none';
+}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Convert EPS to PNG via CloudConvert
+async function epsToPNG(file){
+  setP(10,'上傳 EPS 到 CloudConvert...');
+
+  // Step 1: Create job
+  const jobResp = await fetch('https://api.cloudconvert.com/v2/jobs',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+CC_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      tasks:{
+        'upload-eps':{operation:'import/upload'},
+        'convert-to-png':{operation:'convert',input:'upload-eps',input_format:'eps',output_format:'png',engine:'graphicsmagick'},
+        'export-png':{operation:'export/url',input:'convert-to-png'}
+      }
+    })
+  });
+  const job = await jobResp.json();
+  if(!jobResp.ok) throw new Error('CloudConvert 建立任務失敗: '+(job.message||JSON.stringify(job)));
+
+  const uploadTask = job.data.tasks.find(t=>t.name==='upload-eps');
+
+  // Step 2: Upload file
+  setP(20,'上傳 EPS 檔案...');
+  const formData = new FormData();
+  Object.entries(uploadTask.result.form.parameters).forEach(([k,v])=>formData.append(k,v));
+  formData.append('file', file);
+  const uploadResp = await fetch(uploadTask.result.form.url,{method:'POST',body:formData});
+  if(!uploadResp.ok) throw new Error('上傳失敗');
+
+  // Step 3: Wait for conversion
+  setP(35,'CloudConvert 轉換中...');
+  const jobId = job.data.id;
+  let pngUrl = null;
+  for(let i=0;i<30;i++){
+    await new Promise(r=>setTimeout(r,2000));
+    const statusResp = await fetch('https://api.cloudconvert.com/v2/jobs/'+jobId,{
+      headers:{'Authorization':'Bearer '+CC_KEY}
+    });
+    const status = await statusResp.json();
+    const exportTask = status.data.tasks.find(t=>t.name==='export-png');
+    if(exportTask?.status==='finished'){
+      pngUrl = exportTask.result.files[0].url;
+      break;
+    }
+    if(status.data.status==='error') throw new Error('CloudConvert 轉換失敗');
+  }
+  if(!pngUrl) throw new Error('轉換逾時');
+
+  // Step 4: Download PNG
+  setP(50,'下載轉換結果...');
+  const pngResp = await fetch(pngUrl);
+  const pngBlob = await pngResp.blob();
+  return URL.createObjectURL(pngBlob);
+}
+
+// Render PDF to canvas
+async function renderPDF(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const page = await pdf.getPage(1);
+  const vp = page.getViewport({scale:2});
+  const canvas = document.getElementById('pprev');
+  canvas.width=vp.width; canvas.height=vp.height;
+  await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+  return canvas;
+}
+
+// OCR
+async function ocr(source, label){
+  setP(undefined, `OCR 辨識${label}文字中...`);
+  const result = await Tesseract.recognize(source,['chi_tra','eng'],{
+    logger:m=>{if(m.status==='recognizing text') setP(undefined,`OCR ${label}：${Math.round(m.progress*100)}%`);}
+  });
+  return result.data.text;
+}
+
+function diffTexts(epsText, pdfText){
+  const clean=t=>t.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
+  const epsLines=clean(epsText);
+  const pdfLines=clean(pdfText);
+
+  function sim(a,b){
+    if(a===b)return 1;
+    if(a.includes(b)||b.includes(a))return 0.85;
+    const sa=new Set(a),sb=new Set(b);
+    if(!sa.size||!sb.size)return 0;
+    const inter=[...sa].filter(c=>sb.has(c)).length;
+    return inter/(sa.size+sb.size-inter);
+  }
+
+  const diffs=[],warns=[],oks=[];
+  for(const line of pdfLines){
+    const best=epsLines.reduce((a,b)=>sim(b,line)>sim(a,line)?b:a, '');
+    const s=sim(best,line);
+    if(s>0.75){
+      if(s===1) oks.push({field:'文字行',value:line.slice(0,80)});
+      else diffs.push({field:'文字差異',pdf_value:line.slice(0,80),eps_value:best.slice(0,80),severity:'medium'});
+    } else {
+      warns.push({field:'PDF 有，EPS 未確認',reason:line.slice(0,80),suggestion:'請人工對照 EPS 確認'});
+    }
+  }
+  for(const line of epsLines){
+    const best=pdfLines.reduce((a,b)=>sim(b,line)>sim(a,line)?b:a,'');
+    if(!best||sim(best,line)<=0.75)
+      diffs.push({field:'EPS 獨有文字',eps_value:line.slice(0,80),pdf_value:'（PDF 中未找到）',severity:'high'});
+  }
+
+  const high=diffs.filter(d=>d.severity==='high').length;
+  const verdict=high>0?'fail':diffs.length||warns.length?'warn':'pass';
+  return{
+    verdict,
+    summary:verdict==='pass'?'兩份檔案內容一致':verdict==='fail'?`發現 ${diffs.length} 處差異，請確認後再送印`:`發現 ${diffs.length} 處差異、${warns.length} 項待確認`,
+    differences:diffs, warnings:warns.slice(0,40), confirmed_match:oks,
+    notes:`EPS ${epsLines.length} 行，PDF ${pdfLines.length} 行`, epsText, pdfText
+  };
+}
 
 async function run(){
   if(!epsFile||!pdfFile)return;
   document.getElementById('btn').disabled=true;
   document.getElementById('results').innerHTML='';
   document.getElementById('empty').style.display='none';
-  setP(10,'上傳檔案中...');
+  document.getElementById('prevs').style.display='grid';
+
   try{
-    const fd=new FormData();
-    fd.append('eps',epsFile);
-    fd.append('pdf',pdfFile);
-    setP(30,'伺服器處理中（EPS 轉換需要約 10-20 秒）...');
-    const resp=await fetch(API+'/compare',{method:'POST',body:fd});
-    setP(80,'解析結果...');
-    const data=await resp.json();
-    if(data.error)throw new Error(data.error);
+    // EPS → PNG via CloudConvert
+    const epsPngUrl = await epsToPNG(epsFile);
+    document.getElementById('eprev').src = epsPngUrl;
+
+    // PDF → Canvas
+    setP(55,'渲染 PDF...');
+    const pdfCanvas = await renderPDF(pdfFile);
+
+    // OCR both
+    setP(60,'OCR 辨識中...');
+    const epsText = await ocr(epsPngUrl, 'EPS');
+    setP(75,'');
+    const pdfText = await ocr(pdfCanvas, 'PDF');
+
+    setP(95,'比對差異...');
+    const result = diffTexts(epsText, pdfText);
+
     setP(100,'完成！');
-    setTimeout(()=>{document.getElementById('pw').style.display='none';document.getElementById('st').textContent='';renderResults(data);},300);
-  }catch(e){
-    setErr(e.message);
+    setTimeout(()=>{
+      document.getElementById('pw').style.display='none';
+      document.getElementById('st').textContent='';
+      renderResults(result);
+    },300);
+
+  }catch(err){
+    setErr(err.message);
   }finally{
-    document.getElementById('btn').disabled=false;check();
+    document.getElementById('btn').disabled=false;
+    check();
   }
 }
 
@@ -156,15 +304,13 @@ function renderResults(r){
   }
   if(warns.length){
     html+=`<div class="sec-head"><span>❓ 待人工確認</span></div>`;
-    html+=warns.slice(0,30).map(w=>`<div class="item warn"><span class="item-field">❓ ${esc(w.field)}</span><div>${esc(w.reason)}</div>${w.suggestion?`<div style="margin-top:4px;font-size:.73rem;color:#92400e">💡 ${esc(w.suggestion)}</div>`:''}</div>`).join('');
+    html+=warns.map(w=>`<div class="item warn"><span class="item-field">❓ ${esc(w.field)}</span><div>${esc(w.reason)}</div>${w.suggestion?`<div style="margin-top:4px;font-size:.73rem;color:#92400e">💡 ${esc(w.suggestion)}</div>`:''}</div>`).join('');
   }
   if(oks.length){
     html+=`<div class="sec-head"><span>✓ 確認一致</span></div>`;
     html+=oks.slice(0,20).map(o=>`<div class="item ok"><span class="item-field">✓ ${esc(o.field)}</span><div>${esc(o.value)}</div></div>`).join('');
   }
-  if(r.notes){
-    html+=`<div class="sec-head"><span>📝 備註</span></div><div class="item">${esc(r.notes)}</div>`;
-  }
+  if(r.notes) html+=`<div class="sec-head"><span>📝 備註</span></div><div class="item">${esc(r.notes)}</div>`;
   document.getElementById('results').innerHTML=html;
 }
 </script>
