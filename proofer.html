@@ -36,10 +36,10 @@
   .verdict{text-align:center;padding:12px;border-radius:4px;margin-bottom:14px;font-weight:600;font-size:.9rem}
   .v-pass{background:#d1fae5;color:var(--green);border:1px solid #6ee7b7}
   .v-fail{background:#fee2e2;color:var(--red);border:1px solid #fca5a5}
-  .compare-area{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .compare-area{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
   .img-box{border:1px solid var(--border);border-radius:4px;overflow:hidden;background:#111}
   .img-title{background:var(--ink);color:var(--gl);font-size:.7rem;font-weight:600;padding:5px 10px;letter-spacing:.1em}
-  .img-box canvas{width:100%;display:block}
+  .img-box canvas,.img-box img{width:100%;display:block}
   .diff-box{border:1px solid var(--border);border-radius:4px;overflow:hidden;background:#111;margin-bottom:14px}
   .diff-title{background:var(--red);color:#fff;font-size:.7rem;font-weight:600;padding:5px 10px;letter-spacing:.1em}
   .diff-box canvas{width:100%;display:block}
@@ -48,7 +48,7 @@
   .snum .n{font-size:1.5rem;font-weight:600;display:block;line-height:1}
   .snum .l{font-size:.65rem;color:#c8b89a;margin-top:2px}
   .sdiv{width:1px;height:28px;background:rgba(255,255,255,.15)}
-  .hint{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--amber);border-radius:0 4px 4px 0;padding:10px 14px;font-size:.8rem;line-height:1.6;color:#5a4a3a}
+  .hint{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--amber);border-radius:0 4px 4px 0;padding:10px 14px;font-size:.82rem;line-height:1.7}
   .empty{text-align:center;padding:36px;color:#9a8a7a;font-size:.84rem}
   .empty .ico{font-size:2.4rem;display:block;margin-bottom:10px;opacity:.3}
   @media(max-width:500px){.grid2,.compare-area{grid-template-columns:1fr}}
@@ -57,7 +57,7 @@
 <body>
 <header>
   <h1>EPS <span>×</span> PDF 校稿工具</h1>
-  <p class="sub">不需 API · 不需付費 · 直接比對差異位置</p>
+  <p class="sub">不需 API · 不需付費 · 標示差異位置</p>
 </header>
 <div class="wrap">
   <div class="grid2">
@@ -86,16 +86,15 @@
     <div class="verdict" id="verdict"></div>
     <div class="stats" id="stats"></div>
     <div class="compare-area">
-      <div class="img-box"><div class="img-title">EPS 原始稿</div><canvas id="ec"></canvas></div>
-      <div class="img-box"><div class="img-title">PDF 校稿稿</div><canvas id="pc"></canvas></div>
+      <div class="img-box"><div class="img-title">EPS（裁切後）</div><canvas id="ec"></canvas></div>
+      <div class="img-box"><div class="img-title">PDF（裁切後）</div><canvas id="pc"></canvas></div>
     </div>
     <div class="diff-box">
-      <div class="diff-title">🔴 差異標示圖（紅色 = 有差異）</div>
+      <div class="diff-title">🔴 差異標示（紅色區域 = 有差異，請人工確認）</div>
       <canvas id="dc"></canvas>
     </div>
     <div class="hint" id="hint"></div>
   </div>
-
   <div class="empty" id="empty"><span class="ico">🔍</span>上傳兩份檔案後點擊比對</div>
 </div>
 
@@ -122,19 +121,54 @@ function setP(pct,txt){
 }
 function setErr(txt){const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';document.getElementById('pw').style.display='none';}
 
+// Find dark content bounding box in a canvas
+function findDarkBBox(canvas){
+  const ctx=canvas.getContext('2d');
+  const d=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  let minX=canvas.width,maxX=0,minY=canvas.height,maxY=0;
+  // Find darkest region (the label itself - dark background)
+  for(let y=0;y<canvas.height;y++){
+    for(let x=0;x<canvas.width;x++){
+      const i=(y*canvas.width+x)*4;
+      const brightness=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114);
+      if(brightness<180){ // dark pixel
+        if(x<minX)minX=x;if(x>maxX)maxX=x;
+        if(y<minY)minY=y;if(y>maxY)maxY=y;
+      }
+    }
+  }
+  return{minX,minY,maxX,maxY};
+}
+
+// Crop canvas to bbox
+function cropCanvas(src,minX,minY,maxX,maxY,pad=4){
+  minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);
+  maxX=Math.min(src.width,maxX+pad);maxY=Math.min(src.height,maxY+pad);
+  const w=maxX-minX,h=maxY-minY;
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  c.getContext('2d').drawImage(src,minX,minY,w,h,0,0,w,h);
+  return c;
+}
+
+// Resize canvas to target dimensions
+function resizeCanvas(src,w,h){
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  c.getContext('2d').drawImage(src,0,0,w,h);return c;
+}
+
 async function epsToPNG(file){
-  setP(10,'上傳 EPS 轉換中...');
+  setP(10,'EPS 上傳轉換中...');
   const jobResp=await fetch('https://api.cloudconvert.com/v2/jobs',{
     method:'POST',
     headers:{'Authorization':'Bearer '+CC_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({tasks:{
       'upload':{operation:'import/upload'},
-      'convert':{operation:'convert',input:'upload',input_format:'eps',output_format:'png',engine:'graphicsmagick',width:2000},
+      'convert':{operation:'convert',input:'upload',input_format:'eps',output_format:'png',engine:'graphicsmagick',width:2400},
       'export':{operation:'export/url',input:'convert'}
     }})
   });
   const job=await jobResp.json();
-  if(!jobResp.ok)throw new Error('CloudConvert失敗: '+(job.message||''));
+  if(!jobResp.ok)throw new Error('CloudConvert失敗: '+(job.message||JSON.stringify(job).slice(0,100)));
   const uploadTask=job.data.tasks.find(t=>t.name==='upload');
   const fd=new FormData();
   Object.entries(uploadTask.result.form.parameters).forEach(([k,v])=>fd.append(k,v));
@@ -153,72 +187,42 @@ async function epsToPNG(file){
   throw new Error('轉換逾時');
 }
 
-async function urlToCanvas(url,targetCanvas){
+function loadImageToCanvas(url){
   return new Promise((res,rej)=>{
-    const img=new Image();
-    img.crossOrigin='anonymous';
+    const img=new Image();img.crossOrigin='anonymous';
     img.onload=()=>{
-      targetCanvas.width=img.naturalWidth;
-      targetCanvas.height=img.naturalHeight;
-      targetCanvas.getContext('2d').drawImage(img,0,0);
-      res(targetCanvas);
+      const c=document.createElement('canvas');
+      c.width=img.naturalWidth;c.height=img.naturalHeight;
+      c.getContext('2d').drawImage(img,0,0);res(c);
     };
-    img.onerror=rej;
-    img.src=url;
+    img.onerror=rej;img.src=url;
   });
 }
 
-async function pdfToCanvas(file,targetCanvas){
+async function pdfToCanvas(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   const page=await pdf.getPage(1);
-  // Find content area
-  const vpLow=page.getViewport({scale:1});
-  const tmp=document.createElement('canvas');
-  tmp.width=vpLow.width;tmp.height=vpLow.height;
-  await page.render({canvasContext:tmp.getContext('2d'),viewport:vpLow}).promise;
-  const ctx=tmp.getContext('2d');
-  const d=ctx.getImageData(0,0,tmp.width,tmp.height).data;
-  let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
-  for(let y=0;y<tmp.height;y++)for(let x=0;x<tmp.width;x++){
-    const i=(y*tmp.width+x)*4;
-    if(d[i]<240||d[i+1]<240||d[i+2]<240){
-      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
-    }
-  }
-  const pad=8,scale=3;
-  minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);
-  maxX=Math.min(tmp.width,maxX+pad);maxY=Math.min(tmp.height,maxY+pad);
-  const vpHi=page.getViewport({scale});
-  const full=document.createElement('canvas');
-  full.width=vpHi.width;full.height=vpHi.height;
-  await page.render({canvasContext:full.getContext('2d'),viewport:vpHi}).promise;
-  const cw=(maxX-minX)*scale,ch=(maxY-minY)*scale;
-  targetCanvas.width=cw;targetCanvas.height=ch;
-  targetCanvas.getContext('2d').drawImage(full,minX*scale,minY*scale,cw,ch,0,0,cw,ch);
-  return targetCanvas;
+  const vp=page.getViewport({scale:3});
+  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+  await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  return c;
 }
 
-function diffCanvases(ca,cb,diffCanvas){
-  const W=Math.min(ca.width,cb.width),H=Math.min(ca.height,cb.height);
-  const ctxA=ca.getContext('2d'),ctxB=cb.getContext('2d');
-  const dA=ctxA.getImageData(0,0,W,H).data;
-  const dB=ctxB.getImageData(0,0,W,H).data;
-
-  diffCanvas.width=W;diffCanvas.height=H;
-  const ctxD=diffCanvas.getContext('2d');
-  // Draw blended base
-  ctxD.globalAlpha=0.4;ctxD.drawImage(ca,0,0,W,H);ctxD.globalAlpha=1;
-  const outImg=ctxD.getImageData(0,0,W,H);
-  const out=outImg.data;
-
-  // Block-based diff (8x8 blocks)
-  const BS=8;
-  let diffBlocks=0,totalBlocks=0;
-  const diffMap=[];
+function diffCanvases(ca,cb,outCanvas){
+  const W=ca.width,H=ca.height;
+  const dA=ca.getContext('2d').getImageData(0,0,W,H).data;
+  const dB=cb.getContext('2d').getImageData(0,0,W,H).data;
+  outCanvas.width=W;outCanvas.height=H;
+  const ctxO=outCanvas.getContext('2d');
+  // Draw base (blend of both)
+  ctxO.drawImage(ca,0,0);
+  const out=ctxO.getImageData(0,0,W,H);
+  const od=out.data;
+  const BS=6;let diffBlocks=0,total=0;
   for(let by=0;by<H;by+=BS){
     for(let bx=0;bx<W;bx+=BS){
-      totalBlocks++;
+      total++;
       let sum=0,cnt=0;
       for(let y=by;y<Math.min(by+BS,H);y++){
         for(let x=bx;x<Math.min(bx+BS,W);x++){
@@ -227,32 +231,19 @@ function diffCanvases(ca,cb,diffCanvas){
           sum+=Math.sqrt(dr*dr+dg*dg+db*db);cnt++;
         }
       }
-      const avg=sum/cnt;
-      diffMap.push({bx,by,avg});
-      if(avg>30)diffBlocks++;
-    }
-  }
-
-  // Draw diff highlights
-  const threshold=30;
-  for(const{bx,by,avg}of diffMap){
-    if(avg>threshold){
-      const intensity=Math.min(1,(avg-threshold)/100);
-      for(let y=by;y<Math.min(by+BS,H);y++){
-        for(let x=bx;x<Math.min(bx+BS,W);x++){
-          const i=(y*W+x)*4;
-          out[i]=255;
-          out[i+1]=Math.floor(out[i+1]*(1-intensity));
-          out[i+2]=Math.floor(out[i+2]*(1-intensity));
-          out[i+3]=255;
+      if(sum/cnt>25){
+        diffBlocks++;
+        for(let y=by;y<Math.min(by+BS,H);y++){
+          for(let x=bx;x<Math.min(bx+BS,W);x++){
+            const i=(y*W+x)*4;
+            od[i]=220;od[i+1]=0;od[i+2]=0;od[i+3]=200;
+          }
         }
       }
     }
   }
-  ctxD.putImageData(outImg,0,0);
-
-  const pct=Math.round(diffBlocks/totalBlocks*100);
-  return{diffBlocks,totalBlocks,pct};
+  ctxO.putImageData(out,0,0);
+  return{diffBlocks,total,pct:Math.round(diffBlocks/total*100)};
 }
 
 async function run(){
@@ -262,25 +253,38 @@ async function run(){
   document.getElementById('empty').style.display='none';
 
   try{
-    // EPS → PNG via CloudConvert
+    // Step 1: EPS → PNG
     const epsPngUrl=await epsToPNG(epsFile);
+    setP(45,'載入圖像...');
+    const epsRaw=await loadImageToCanvas(epsPngUrl);
 
+    // Step 2: PDF → canvas
     setP(55,'渲染 PDF...');
-    const ec=document.getElementById('ec');
-    const pc=document.getElementById('pc');
-    await urlToCanvas(epsPngUrl,ec);
-    await pdfToCanvas(pdfFile,pc);
+    const pdfRaw=await pdfToCanvas(pdfFile);
 
+    // Step 3: Find dark label bbox in both and crop
+    setP(65,'裁切標籤區域...');
+    const epsBox=findDarkBBox(epsRaw);
+    const pdfBox=findDarkBBox(pdfRaw);
+    const epsCrop=cropCanvas(epsRaw,epsBox.minX,epsBox.minY,epsBox.maxX,epsBox.maxY);
+    const pdfCrop=cropCanvas(pdfRaw,pdfBox.minX,pdfBox.minY,pdfBox.maxX,pdfBox.maxY);
+
+    // Step 4: Draw previews
+    const ec=document.getElementById('ec');
+    ec.width=epsCrop.width;ec.height=epsCrop.height;
+    ec.getContext('2d').drawImage(epsCrop,0,0);
+    const pc=document.getElementById('pc');
+    pc.width=pdfCrop.width;pc.height=pdfCrop.height;
+    pc.getContext('2d').drawImage(pdfCrop,0,0);
+
+    // Step 5: Resize to same size and diff
     setP(80,'比對差異...');
-    // Resize to same size for comparison
-    const W=Math.max(ec.width,pc.width),H=Math.max(ec.height,pc.height);
-    function resizeCanvas(src,w,h){
-      const c=document.createElement('canvas');c.width=w;c.height=h;
-      c.getContext('2d').drawImage(src,0,0,w,h);return c;
-    }
-    const ca=resizeCanvas(ec,W,H),cb=resizeCanvas(pc,W,H);
+    const W=Math.max(epsCrop.width,pdfCrop.width);
+    const H=Math.max(epsCrop.height,pdfCrop.height);
+    const ca=resizeCanvas(epsCrop,W,H);
+    const cb=resizeCanvas(pdfCrop,W,H);
     const dc=document.getElementById('dc');
-    const{diffBlocks,totalBlocks,pct}=diffCanvases(ca,cb,dc);
+    const{diffBlocks,total,pct}=diffCanvases(ca,cb,dc);
 
     setP(100,'完成！');
     setTimeout(()=>{
@@ -289,25 +293,25 @@ async function run(){
       document.getElementById('rw').style.display='block';
 
       const verdict=document.getElementById('verdict');
-      if(pct<=3){
+      if(pct<=5){
         verdict.className='verdict v-pass';
         verdict.textContent='✅ 兩份檔案高度一致，可以送印';
       } else {
         verdict.className='verdict v-fail';
-        verdict.textContent=`❌ 發現差異，建議人工確認後再送印`;
+        verdict.textContent=`❌ 發現差異（${pct}%），請確認紅色區域後再送印`;
       }
 
       document.getElementById('stats').innerHTML=`
-        <div class="snum"><span class="n" style="color:${pct>3?'#e74c3c':'#2ecc71'}">${pct}%</span><span class="l">差異比例</span></div>
+        <div class="snum"><span class="n" style="color:${pct>5?'#e74c3c':'#2ecc71'}">${pct}%</span><span class="l">差異比例</span></div>
         <div class="sdiv"></div>
-        <div class="snum"><span class="n" style="color:#f39c12">${diffBlocks}</span><span class="l">差異區塊數</span></div>
+        <div class="snum"><span class="n" style="color:#f39c12">${diffBlocks}</span><span class="l">差異區塊</span></div>
         <div class="sdiv"></div>
-        <div class="snum"><span class="n">${totalBlocks}</span><span class="l">總區塊數</span></div>`;
+        <div class="snum"><span class="n">${total}</span><span class="l">總區塊數</span></div>`;
 
       document.getElementById('hint').innerHTML=
-        pct<=3
-          ? '✅ 差異比例極低，兩份檔案內容一致。'
-          : `⚠️ 紅色區域為差異位置，請對照上方兩張預覽圖確認。差異比例 ${pct}%，${pct>15?'差異明顯，請仔細確認。':'少量差異，可能為字體渲染差異，請人工確認。'}`;
+        pct<=5
+          ? '✅ 差異比例極低，兩份檔案內容一致，可以放心送印。'
+          : `⚠️ 紅色區域為差異位置，請對照上方 EPS 與 PDF 預覽圖，人工確認差異內容。<br>差異比例 ${pct}%${pct>20?'，差異明顯，請仔細檢查。':'，建議逐一確認紅色區域。'}`;
     },300);
 
   }catch(err){
