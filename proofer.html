@@ -4,68 +4,60 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EPS × PDF 校稿工具</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{--ink:#1a1410;--paper:#f5f0e8;--gold:#b8860b;--gl:#d4a843;--red:#c0392b;--green:#2d6a4f;--amber:#d97706;--border:#c8b89a;--card:#fdfaf4}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--paper);color:var(--ink);font-family:'Noto Serif TC',serif,sans-serif;min-height:100vh}
-  header{text-align:center;padding:32px 20px 22px;border-bottom:2px solid var(--border)}
-  header::after{content:'';display:block;width:60px;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:12px auto 0}
-  h1{font-size:1.5rem;font-weight:600;letter-spacing:.1em}
+  body{background:var(--paper);color:var(--ink);font-family:sans-serif;min-height:100vh}
+  header{text-align:center;padding:28px 20px 18px;border-bottom:2px solid var(--border)}
+  header::after{content:'';display:block;width:60px;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:10px auto 0}
+  h1{font-size:1.4rem;font-weight:600;letter-spacing:.08em}
   h1 span{color:var(--gold)}
-  .sub{font-size:.76rem;color:#7a6a5a;margin-top:6px}
-  .wrap{max-width:680px;margin:0 auto;padding:24px 16px 60px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
-  .zone{display:block;background:var(--card);border:2px dashed var(--border);border-radius:6px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
-  .zone:hover{border-color:var(--gold);background:#fefcf5}
+  .sub{font-size:.75rem;color:#7a6a5a;margin-top:5px}
+  .wrap{max-width:900px;margin:0 auto;padding:20px 16px 60px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+  .zone{display:block;background:var(--card);border:2px dashed var(--border);border-radius:6px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+  .zone:hover{border-color:var(--gold)}
   .zone.done{border-style:solid;border-color:var(--green);background:#f0faf4}
-  .zone .bar{position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .2s;background:linear-gradient(90deg,var(--green),#52b788,var(--green))}
+  .zone .bar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--green),#52b788,var(--green));opacity:0;transition:.2s}
   .zone.done .bar{opacity:1}
-  .zone-icon{font-size:1.8rem;margin-bottom:6px}
-  .zone-label{font-size:.82rem;font-weight:600;color:var(--gold);letter-spacing:.08em}
+  .zone-icon{font-size:1.6rem;margin-bottom:5px}
+  .zone-label{font-size:.82rem;font-weight:600;color:var(--gold)}
   .zone-hint{font-size:.68rem;color:#9a8a7a;margin-top:3px}
   .zone-name{font-size:.68rem;font-family:monospace;color:var(--green);margin-top:6px;word-break:break-all}
   input[type=file]{display:none}
-  .btn{display:block;width:100%;padding:14px;background:var(--ink);color:var(--gl);border:none;border-radius:4px;font-size:.9rem;font-weight:600;letter-spacing:.16em;cursor:pointer;font-family:inherit;margin-bottom:20px;transition:all .2s}
+  .btn{display:block;width:100%;padding:13px;background:var(--ink);color:var(--gl);border:none;border-radius:4px;font-size:.9rem;font-weight:600;letter-spacing:.14em;cursor:pointer;font-family:inherit;margin-bottom:16px;transition:.2s}
   .btn:disabled{background:#c8b89a;color:#f5f0e8;cursor:not-allowed}
   .prog-wrap{background:#e8dfc8;border-radius:2px;height:4px;margin-bottom:8px;overflow:hidden;display:none}
-  .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gl));width:0%;transition:width .4s}
-  .status{text-align:center;font-size:.8rem;color:#7a6a5a;margin-bottom:14px;min-height:18px;line-height:1.6}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gl));width:0%;transition:width .3s}
+  .status{text-align:center;font-size:.8rem;color:#7a6a5a;margin-bottom:12px;min-height:18px}
   .status.err{color:var(--red)}
-  .previews{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-  .pbox{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden}
-  .ptitle{background:var(--ink);color:var(--gl);font-size:.7rem;font-weight:600;letter-spacing:.1em;padding:6px 12px}
-  .pimg{width:100%;height:160px;object-fit:contain;background:#1a1410;display:block}
-  .verdict{text-align:center;padding:13px;border-radius:4px;margin-bottom:16px;font-weight:600;font-size:.88rem;letter-spacing:.06em}
+  .result-wrap{display:none}
+  .verdict{text-align:center;padding:12px;border-radius:4px;margin-bottom:14px;font-weight:600;font-size:.9rem}
   .v-pass{background:#d1fae5;color:var(--green);border:1px solid #6ee7b7}
-  .v-warn{background:#fef3c7;color:var(--amber);border:1px solid #fcd34d}
   .v-fail{background:#fee2e2;color:var(--red);border:1px solid #fca5a5}
-  .counts{background:var(--ink);color:var(--paper);border-radius:4px;padding:14px 18px;margin-bottom:20px;display:flex;gap:16px;justify-content:center;align-items:center}
-  .cnum{text-align:center}
-  .cnum .n{font-size:1.6rem;font-weight:600;display:block;line-height:1}
-  .cnum .l{font-size:.66rem;letter-spacing:.08em;color:#c8b89a;margin-top:2px}
-  .cdiv{width:1px;height:30px;background:rgba(255,255,255,.15)}
-  .sec-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;margin-top:18px}
-  .sec-head span{font-size:.7rem;font-weight:600;letter-spacing:.12em;color:#9a8a7a;white-space:nowrap}
-  .sec-head::after{content:'';flex:1;height:1px;background:var(--border)}
-  .item{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--border);border-radius:0 4px 4px 0;padding:11px 14px;margin-bottom:8px;font-size:.84rem;line-height:1.7}
-  .item.diff{border-left-color:var(--red);background:#fff8f8}
-  .item.warn{border-left-color:var(--amber);background:#fffbf0}
-  .item.ok{border-left-color:var(--green);background:#f0faf4}
-  .item-field{font-weight:600;font-size:.72rem;color:#5a4a3a;display:block;margin-bottom:3px}
-  .diff-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
-  .diff-col{background:rgba(0,0,0,.05);border-radius:2px;padding:6px 9px;font-size:.75rem;font-family:monospace}
-  .diff-col-lbl{font-size:.63rem;font-weight:600;color:#7a6a5a;margin-bottom:2px;font-family:inherit}
-  .empty{text-align:center;padding:36px 20px;color:#9a8a7a;font-size:.84rem}
+  .compare-area{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .img-box{border:1px solid var(--border);border-radius:4px;overflow:hidden;background:#111}
+  .img-title{background:var(--ink);color:var(--gl);font-size:.7rem;font-weight:600;padding:5px 10px;letter-spacing:.1em}
+  .img-box canvas{width:100%;display:block}
+  .diff-box{border:1px solid var(--border);border-radius:4px;overflow:hidden;background:#111;margin-bottom:14px}
+  .diff-title{background:var(--red);color:#fff;font-size:.7rem;font-weight:600;padding:5px 10px;letter-spacing:.1em}
+  .diff-box canvas{width:100%;display:block}
+  .stats{background:var(--ink);color:var(--paper);border-radius:4px;padding:12px 16px;display:flex;gap:16px;justify-content:center;align-items:center;margin-bottom:14px}
+  .snum{text-align:center}
+  .snum .n{font-size:1.5rem;font-weight:600;display:block;line-height:1}
+  .snum .l{font-size:.65rem;color:#c8b89a;margin-top:2px}
+  .sdiv{width:1px;height:28px;background:rgba(255,255,255,.15)}
+  .hint{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--amber);border-radius:0 4px 4px 0;padding:10px 14px;font-size:.8rem;line-height:1.6;color:#5a4a3a}
+  .empty{text-align:center;padding:36px;color:#9a8a7a;font-size:.84rem}
   .empty .ico{font-size:2.4rem;display:block;margin-bottom:10px;opacity:.3}
-  @media(max-width:480px){.grid2,.previews,.diff-cols{grid-template-columns:1fr}}
+  @media(max-width:500px){.grid2,.compare-area{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
   <h1>EPS <span>×</span> PDF 校稿工具</h1>
-  <p class="sub">自動比對差異 · 送印前最後把關</p>
+  <p class="sub">不需 API · 不需付費 · 直接比對差異位置</p>
 </header>
 <div class="wrap">
   <div class="grid2">
@@ -89,24 +81,31 @@
   <div class="prog-wrap" id="pw"><div class="prog-fill" id="pf"></div></div>
   <div class="status" id="st"></div>
   <button class="btn" id="btn" disabled onclick="run()">▶ 開始比對校稿</button>
-  <div class="previews" id="prevs" style="display:none">
-    <div class="pbox"><div class="ptitle">EPS 預覽</div><img class="pimg" id="eprev"></div>
-    <div class="pbox"><div class="ptitle">PDF 預覽</div><canvas class="pimg" id="pprev"></canvas></div>
+
+  <div class="result-wrap" id="rw">
+    <div class="verdict" id="verdict"></div>
+    <div class="stats" id="stats"></div>
+    <div class="compare-area">
+      <div class="img-box"><div class="img-title">EPS 原始稿</div><canvas id="ec"></canvas></div>
+      <div class="img-box"><div class="img-title">PDF 校稿稿</div><canvas id="pc"></canvas></div>
+    </div>
+    <div class="diff-box">
+      <div class="diff-title">🔴 差異標示圖（紅色 = 有差異）</div>
+      <canvas id="dc"></canvas>
+    </div>
+    <div class="hint" id="hint"></div>
   </div>
-  <div id="results"></div>
+
   <div class="empty" id="empty"><span class="ico">🔍</span>上傳兩份檔案後點擊比對</div>
 </div>
+
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const CC_KEY='eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNGZlMGZmNjg1OTg2MjVhNzhiOWYxYzAwZTZhMGVjMDhlZjliNzU0ZjM3NjY4ODkyOTAyN2QzNDhhMjZkOTAxMTYyYThlMmI3ZmJmMjQ4MjMiLCJpYXQiOjE3Nzc4OTkxODAuNTAwOTgzLCJuYmYiOjE3Nzc4OTkxODAuNTAwOTg1LCJleHAiOjQ5MzM1NzI3ODAuNDkzNTg4LCJzdWIiOiI3NTM5ODYyNSIsInNjb3BlcyI6WyJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIl19.RP7R-vPvJbvZvB0dJdH6ZEbIgtRVtN9LmCxIrEop3e6Sc56pzF0gHKqoscuL6P88FNOkUBzA-v168k6QT5kQMtq7K3DY-pHiPWdxGwEjzzIoZN2pIy7aVFVWXB-AzQpnmGuH-pZ5W0SLlXHX566KezZCwU7awkxahZt8y2DUF929JEbK-RrVW9UhHdb1jdz85q2kTypEWZQ9Zk9hO6HTnFekR5hbN4wzc3pMDHXiG_mL7R30gnnrFDjvwYAItUIB46NVTpqnKkOLcSmZT6_mNJ7Q9tcte77McQ2lcrVhoVRpNRS4FVfbvPKlSwf3Esc8CjXNDclTk206kO1Xav2F4LC-Umvpp2umK4GX14fXTMdZrUSduxWfV-Zk8pr_TP1aqNKjTnaxaxmbVh_UIxLzaTyS5vfA4aDWpAV2vQJvDIj10or1HnATfoyVH_qlvOzy5KeLOPTdzvgJD1vU-FlU4-oB3zQqAsyyMtP2gCOt0ihd9G9AAdrbEB1_O43CVrlrQIpgzywzDXqSpyqeBM42zyfZg1SEmVss2mHk9nqKLcXopZP_Cc19IKWNT1INfRbDX-joON5tmRQVE6x35jfVhGx7qlJcEPWk_RjdqehSmhCLX9qCdA9VwJSd-H6kB02cjFlFU5uy1enf4lp5UeGuep3n5b0rxq80PCZZfz2UXoo';
 
-const CC_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNGZlMGZmNjg1OTg2MjVhNzhiOWYxYzAwZTZhMGVjMDhlZjliNzU0ZjM3NjY4ODkyOTAyN2QzNDhhMjZkOTAxMTYyYThlMmI3ZmJmMjQ4MjMiLCJpYXQiOjE3Nzc4OTkxODAuNTAwOTgzLCJuYmYiOjE3Nzc4OTkxODAuNTAwOTg1LCJleHAiOjQ5MzM1NzI3ODAuNDkzNTg4LCJzdWIiOiI3NTM5ODYyNSIsInNjb3BlcyI6WyJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIl19.RP7R-vPvJbvZvB0dJdH6ZEbIgtRVtN9LmCxIrEop3e6Sc56pzF0gHKqoscuL6P88FNOkUBzA-v168k6QT5kQMtq7K3DY-pHiPWdxGwEjzzIoZN2pIy7aVFVWXB-AzQpnmGuH-pZ5W0SLlXHX566KezZCwU7awkxahZt8y2DUF929JEbK-RrVW9UhHdb1jdz85q2kTypEWZQ9Zk9hO6HTnFekR5hbN4wzc3pMDHXiG_mL7R30gnnrFDjvwYAItUIB46NVTpqnKkOLcSmZT6_mNJ7Q9tcte77McQ2lcrVhoVRpNRS4FVfbvPKlSwf3Esc8CjXNDclTk206kO1Xav2F4LC-Umvpp2umK4GX14fXTMdZrUSduxWfV-Zk8pr_TP1aqNKjTnaxaxmbVh_UIxLzaTyS5vfA4aDWpAV2vQJvDIj10or1HnATfoyVH_qlvOzy5KeLOPTdzvgJD1vU-FlU4-oB3zQqAsyyMtP2gCOt0ihd9G9AAdrbEB1_O43CVrlrQIpgzywzDXqSpyqeBM42zyfZg1SEmVss2mHk9nqKLcXopZP_Cc19IKWNT1INfRbDX-joON5tmRQVE6x35jfVhGx7qlJcEPWk_RjdqehSmhCLX9qCdA9VwJSd-H6kB02cjFlFU5uy1enf4lp5UeGuep3n5b0rxq80PCZZfz2UXoo';
-
-let epsFile=null, pdfFile=null;
-
+let epsFile=null,pdfFile=null;
 function setup(ii,zi,ni,type){
-  const inp=document.getElementById(ii);
-  const zone=document.getElementById(zi);
-  const nameEl=document.getElementById(ni);
+  const inp=document.getElementById(ii),zone=document.getElementById(zi),nameEl=document.getElementById(ni);
   inp.addEventListener('change',e=>{
     const f=e.target.files[0];if(!f)return;
     if(type==='eps')epsFile=f;else pdfFile=f;
@@ -114,304 +113,208 @@ function setup(ii,zi,ni,type){
     zone.classList.add('done');check();
   });
 }
-setup('ei','ez','en','eps');
-setup('pi','pz','pn','pdf');
+setup('ei','ez','en','eps');setup('pi','pz','pn','pdf');
 function check(){document.getElementById('btn').disabled=!(epsFile&&pdfFile);}
 function setP(pct,txt){
   document.getElementById('pw').style.display='block';
   document.getElementById('pf').style.width=pct+'%';
   if(txt!==undefined){const s=document.getElementById('st');s.textContent=txt;s.className='status';}
 }
-function setErr(txt){
-  const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';
-  document.getElementById('pw').style.display='none';
-}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function setErr(txt){const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';document.getElementById('pw').style.display='none';}
 
-// Convert EPS to PNG via CloudConvert
 async function epsToPNG(file){
-  setP(10,'上傳 EPS 到 CloudConvert...');
-
-  // Step 1: Create job
-  const jobResp = await fetch('https://api.cloudconvert.com/v2/jobs',{
+  setP(10,'上傳 EPS 轉換中...');
+  const jobResp=await fetch('https://api.cloudconvert.com/v2/jobs',{
     method:'POST',
     headers:{'Authorization':'Bearer '+CC_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({
-      tasks:{
-        'upload-eps':{operation:'import/upload'},
-        'convert-to-png':{operation:'convert',input:'upload-eps',input_format:'eps',output_format:'png',engine:'graphicsmagick'},
-        'export-png':{operation:'export/url',input:'convert-to-png'}
-      }
-    })
+    body:JSON.stringify({tasks:{
+      'upload':{operation:'import/upload'},
+      'convert':{operation:'convert',input:'upload',input_format:'eps',output_format:'png',engine:'graphicsmagick',width:2000},
+      'export':{operation:'export/url',input:'convert'}
+    }})
   });
-  const job = await jobResp.json();
-  if(!jobResp.ok) throw new Error('CloudConvert 建立任務失敗: '+(job.message||JSON.stringify(job)));
-
-  const uploadTask = job.data.tasks.find(t=>t.name==='upload-eps');
-
-  // Step 2: Upload file
-  setP(20,'上傳 EPS 檔案...');
-  const formData = new FormData();
-  Object.entries(uploadTask.result.form.parameters).forEach(([k,v])=>formData.append(k,v));
-  formData.append('file', file);
-  const uploadResp = await fetch(uploadTask.result.form.url,{method:'POST',body:formData});
-  if(!uploadResp.ok) throw new Error('上傳失敗');
-
-  // Step 3: Wait for conversion
-  setP(35,'CloudConvert 轉換中...');
-  const jobId = job.data.id;
-  let pngUrl = null;
+  const job=await jobResp.json();
+  if(!jobResp.ok)throw new Error('CloudConvert失敗: '+(job.message||''));
+  const uploadTask=job.data.tasks.find(t=>t.name==='upload');
+  const fd=new FormData();
+  Object.entries(uploadTask.result.form.parameters).forEach(([k,v])=>fd.append(k,v));
+  fd.append('file',file);
+  setP(20,'上傳中...');
+  await fetch(uploadTask.result.form.url,{method:'POST',body:fd});
+  setP(30,'轉換中...');
+  const jobId=job.data.id;
   for(let i=0;i<30;i++){
     await new Promise(r=>setTimeout(r,2000));
-    const statusResp = await fetch('https://api.cloudconvert.com/v2/jobs/'+jobId,{
-      headers:{'Authorization':'Bearer '+CC_KEY}
-    });
-    const status = await statusResp.json();
-    const exportTask = status.data.tasks.find(t=>t.name==='export-png');
-    if(exportTask?.status==='finished'){
-      pngUrl = exportTask.result.files[0].url;
-      break;
-    }
-    if(status.data.status==='error') throw new Error('CloudConvert 轉換失敗');
+    const s=await(await fetch('https://api.cloudconvert.com/v2/jobs/'+jobId,{headers:{'Authorization':'Bearer '+CC_KEY}})).json();
+    const exp=s.data.tasks.find(t=>t.name==='export');
+    if(exp?.status==='finished')return exp.result.files[0].url;
+    if(s.data.status==='error')throw new Error('轉換失敗');
   }
-  if(!pngUrl) throw new Error('轉換逾時');
-
-  // Step 4: Download PNG
-  setP(50,'下載轉換結果...');
-  const pngResp = await fetch(pngUrl);
-  const pngBlob = await pngResp.blob();
-  return URL.createObjectURL(pngBlob);
+  throw new Error('轉換逾時');
 }
 
-// Render PDF to canvas - auto crop to content area
-async function renderPDF(file){
-  const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-  const page = await pdf.getPage(1);
-  
-  // First render at low res to detect content bounds
-  const vpLow = page.getViewport({scale:1});
-  const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width = vpLow.width; tmpCanvas.height = vpLow.height;
-  await page.render({canvasContext:tmpCanvas.getContext('2d'), viewport:vpLow}).promise;
-  
-  // Find content bounding box
-  const ctx = tmpCanvas.getContext('2d');
-  const imgData = ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
-  const data = imgData.data;
-  let minX=tmpCanvas.width, maxX=0, minY=tmpCanvas.height, maxY=0;
-  for(let y=0;y<tmpCanvas.height;y++){
-    for(let x=0;x<tmpCanvas.width;x++){
-      const i=(y*tmpCanvas.width+x)*4;
-      // Non-white pixel
-      if(data[i]<240||data[i+1]<240||data[i+2]<240){
-        if(x<minX)minX=x; if(x>maxX)maxX=x;
-        if(y<minY)minY=y; if(y>maxY)maxY=y;
-      }
-    }
-  }
-  
-  // Add padding
-  const pad=10;
-  minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
-  maxX=Math.min(tmpCanvas.width,maxX+pad); maxY=Math.min(tmpCanvas.height,maxY+pad);
-  
-  // If content found, render at high res and crop
-  const scale = 4; // High res for OCR
-  const vpHigh = page.getViewport({scale});
-  const fullCanvas = document.createElement('canvas');
-  fullCanvas.width=vpHigh.width; fullCanvas.height=vpHigh.height;
-  await page.render({canvasContext:fullCanvas.getContext('2d'),viewport:vpHigh}).promise;
-  
-  // Crop to content area (scaled)
-  const cropW = (maxX-minX)*scale;
-  const cropH = (maxY-minY)*scale;
-  const canvas = document.getElementById('pprev');
-  canvas.width = cropW; canvas.height = cropH;
-  canvas.getContext('2d').drawImage(fullCanvas,
-    minX*scale, minY*scale, cropW, cropH,
-    0, 0, cropW, cropH
-  );
-  return canvas;
-}
-
-// Preprocess image for better OCR on gold-on-black labels
-function preprocessForOCR(source){
-  const tmpCanvas = document.createElement('canvas');
-  let img;
-  if(source instanceof HTMLCanvasElement){
-    tmpCanvas.width = source.width;
-    tmpCanvas.height = source.height;
-    tmpCanvas.getContext('2d').drawImage(source,0,0);
-  } else {
-    // It's a URL - draw to canvas first
-    return source; // fallback, handle async below
-  }
-  const ctx = tmpCanvas.getContext('2d');
-  const imgData = ctx.getImageData(0,0,tmpCanvas.width,tmpCanvas.height);
-  const d = imgData.data;
-  for(let i=0;i<d.length;i+=4){
-    const r=d[i], g=d[i+1], b=d[i+2];
-    // Detect gold/bright pixels on dark background
-    // Gold: high R, medium G, low B; or just generally bright
-    const brightness = (r*0.299 + g*0.587 + b*0.114);
-    if(brightness > 80){
-      d[i]=0; d[i+1]=0; d[i+2]=0; d[i+3]=255; // black text
-    } else {
-      d[i]=255; d[i+1]=255; d[i+2]=255; d[i+3]=255; // white bg
-    }
-  }
-  ctx.putImageData(imgData,0,0);
-  return tmpCanvas;
-}
-
-async function preprocessURL(url){
-  return new Promise(res=>{
-    const img = new Image();
+async function urlToCanvas(url,targetCanvas){
+  return new Promise((res,rej)=>{
+    const img=new Image();
     img.crossOrigin='anonymous';
     img.onload=()=>{
-      const c=document.createElement('canvas');
-      c.width=img.naturalWidth; c.height=img.naturalHeight;
-      const ctx=c.getContext('2d');
-      ctx.drawImage(img,0,0);
-      const imgData=ctx.getImageData(0,0,c.width,c.height);
-      const d=imgData.data;
-      for(let i=0;i<d.length;i+=4){
-        const brightness=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114);
-        if(brightness>80){d[i]=0;d[i+1]=0;d[i+2]=0;d[i+3]=255;}
-        else{d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=255;}
-      }
-      ctx.putImageData(imgData,0,0);
-      res(c);
+      targetCanvas.width=img.naturalWidth;
+      targetCanvas.height=img.naturalHeight;
+      targetCanvas.getContext('2d').drawImage(img,0,0);
+      res(targetCanvas);
     };
-    img.onerror=()=>res(url);
+    img.onerror=rej;
     img.src=url;
   });
 }
 
-// OCR
-async function ocr(source, label){
-  setP(undefined, `OCR 辨識${label}文字中...`);
-  let processedSource;
-  if(typeof source === 'string'){
-    processedSource = await preprocessURL(source);
-  } else {
-    processedSource = preprocessForOCR(source);
-  }
-  const result = await Tesseract.recognize(processedSource,['chi_tra','eng'],{
-    logger:m=>{if(m.status==='recognizing text') setP(undefined,`OCR ${label}：${Math.round(m.progress*100)}%`);}
-  });
-  return result.data.text;
-}
-
-function diffTexts(epsText, pdfText){
-  const clean=t=>t.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
-  const epsLines=clean(epsText);
-  const pdfLines=clean(pdfText);
-
-  function sim(a,b){
-    if(a===b)return 1;
-    if(a.includes(b)||b.includes(a))return 0.85;
-    const sa=new Set(a),sb=new Set(b);
-    if(!sa.size||!sb.size)return 0;
-    const inter=[...sa].filter(c=>sb.has(c)).length;
-    return inter/(sa.size+sb.size-inter);
-  }
-
-  const diffs=[],warns=[],oks=[];
-  for(const line of pdfLines){
-    const best=epsLines.reduce((a,b)=>sim(b,line)>sim(a,line)?b:a, '');
-    const s=sim(best,line);
-    if(s>0.75){
-      if(s===1) oks.push({field:'文字行',value:line.slice(0,80)});
-      else diffs.push({field:'文字差異',pdf_value:line.slice(0,80),eps_value:best.slice(0,80),severity:'medium'});
-    } else {
-      warns.push({field:'PDF 有，EPS 未確認',reason:line.slice(0,80),suggestion:'請人工對照 EPS 確認'});
+async function pdfToCanvas(file,targetCanvas){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const page=await pdf.getPage(1);
+  // Find content area
+  const vpLow=page.getViewport({scale:1});
+  const tmp=document.createElement('canvas');
+  tmp.width=vpLow.width;tmp.height=vpLow.height;
+  await page.render({canvasContext:tmp.getContext('2d'),viewport:vpLow}).promise;
+  const ctx=tmp.getContext('2d');
+  const d=ctx.getImageData(0,0,tmp.width,tmp.height).data;
+  let minX=tmp.width,maxX=0,minY=tmp.height,maxY=0;
+  for(let y=0;y<tmp.height;y++)for(let x=0;x<tmp.width;x++){
+    const i=(y*tmp.width+x)*4;
+    if(d[i]<240||d[i+1]<240||d[i+2]<240){
+      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
     }
   }
-  for(const line of epsLines){
-    const best=pdfLines.reduce((a,b)=>sim(b,line)>sim(a,line)?b:a,'');
-    if(!best||sim(best,line)<=0.75)
-      diffs.push({field:'EPS 獨有文字',eps_value:line.slice(0,80),pdf_value:'（PDF 中未找到）',severity:'high'});
+  const pad=8,scale=3;
+  minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);
+  maxX=Math.min(tmp.width,maxX+pad);maxY=Math.min(tmp.height,maxY+pad);
+  const vpHi=page.getViewport({scale});
+  const full=document.createElement('canvas');
+  full.width=vpHi.width;full.height=vpHi.height;
+  await page.render({canvasContext:full.getContext('2d'),viewport:vpHi}).promise;
+  const cw=(maxX-minX)*scale,ch=(maxY-minY)*scale;
+  targetCanvas.width=cw;targetCanvas.height=ch;
+  targetCanvas.getContext('2d').drawImage(full,minX*scale,minY*scale,cw,ch,0,0,cw,ch);
+  return targetCanvas;
+}
+
+function diffCanvases(ca,cb,diffCanvas){
+  const W=Math.min(ca.width,cb.width),H=Math.min(ca.height,cb.height);
+  const ctxA=ca.getContext('2d'),ctxB=cb.getContext('2d');
+  const dA=ctxA.getImageData(0,0,W,H).data;
+  const dB=ctxB.getImageData(0,0,W,H).data;
+
+  diffCanvas.width=W;diffCanvas.height=H;
+  const ctxD=diffCanvas.getContext('2d');
+  // Draw blended base
+  ctxD.globalAlpha=0.4;ctxD.drawImage(ca,0,0,W,H);ctxD.globalAlpha=1;
+  const outImg=ctxD.getImageData(0,0,W,H);
+  const out=outImg.data;
+
+  // Block-based diff (8x8 blocks)
+  const BS=8;
+  let diffBlocks=0,totalBlocks=0;
+  const diffMap=[];
+  for(let by=0;by<H;by+=BS){
+    for(let bx=0;bx<W;bx+=BS){
+      totalBlocks++;
+      let sum=0,cnt=0;
+      for(let y=by;y<Math.min(by+BS,H);y++){
+        for(let x=bx;x<Math.min(bx+BS,W);x++){
+          const i=(y*W+x)*4;
+          const dr=dA[i]-dB[i],dg=dA[i+1]-dB[i+1],db=dA[i+2]-dB[i+2];
+          sum+=Math.sqrt(dr*dr+dg*dg+db*db);cnt++;
+        }
+      }
+      const avg=sum/cnt;
+      diffMap.push({bx,by,avg});
+      if(avg>30)diffBlocks++;
+    }
   }
 
-  const high=diffs.filter(d=>d.severity==='high').length;
-  const verdict=high>0?'fail':diffs.length||warns.length?'warn':'pass';
-  return{
-    verdict,
-    summary:verdict==='pass'?'兩份檔案內容一致':verdict==='fail'?`發現 ${diffs.length} 處差異，請確認後再送印`:`發現 ${diffs.length} 處差異、${warns.length} 項待確認`,
-    differences:diffs, warnings:warns.slice(0,40), confirmed_match:oks,
-    notes:`EPS ${epsLines.length} 行，PDF ${pdfLines.length} 行`, epsText, pdfText
-  };
+  // Draw diff highlights
+  const threshold=30;
+  for(const{bx,by,avg}of diffMap){
+    if(avg>threshold){
+      const intensity=Math.min(1,(avg-threshold)/100);
+      for(let y=by;y<Math.min(by+BS,H);y++){
+        for(let x=bx;x<Math.min(bx+BS,W);x++){
+          const i=(y*W+x)*4;
+          out[i]=255;
+          out[i+1]=Math.floor(out[i+1]*(1-intensity));
+          out[i+2]=Math.floor(out[i+2]*(1-intensity));
+          out[i+3]=255;
+        }
+      }
+    }
+  }
+  ctxD.putImageData(outImg,0,0);
+
+  const pct=Math.round(diffBlocks/totalBlocks*100);
+  return{diffBlocks,totalBlocks,pct};
 }
 
 async function run(){
   if(!epsFile||!pdfFile)return;
   document.getElementById('btn').disabled=true;
-  document.getElementById('results').innerHTML='';
+  document.getElementById('rw').style.display='none';
   document.getElementById('empty').style.display='none';
-  document.getElementById('prevs').style.display='grid';
 
   try{
     // EPS → PNG via CloudConvert
-    const epsPngUrl = await epsToPNG(epsFile);
-    document.getElementById('eprev').src = epsPngUrl;
+    const epsPngUrl=await epsToPNG(epsFile);
 
-    // PDF → Canvas
     setP(55,'渲染 PDF...');
-    const pdfCanvas = await renderPDF(pdfFile);
+    const ec=document.getElementById('ec');
+    const pc=document.getElementById('pc');
+    await urlToCanvas(epsPngUrl,ec);
+    await pdfToCanvas(pdfFile,pc);
 
-    // OCR both
-    setP(60,'OCR 辨識中...');
-    const epsText = await ocr(epsPngUrl, 'EPS');
-    setP(75,'');
-    const pdfText = await ocr(pdfCanvas, 'PDF');
-
-    setP(95,'比對差異...');
-    const result = diffTexts(epsText, pdfText);
+    setP(80,'比對差異...');
+    // Resize to same size for comparison
+    const W=Math.max(ec.width,pc.width),H=Math.max(ec.height,pc.height);
+    function resizeCanvas(src,w,h){
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(src,0,0,w,h);return c;
+    }
+    const ca=resizeCanvas(ec,W,H),cb=resizeCanvas(pc,W,H);
+    const dc=document.getElementById('dc');
+    const{diffBlocks,totalBlocks,pct}=diffCanvases(ca,cb,dc);
 
     setP(100,'完成！');
     setTimeout(()=>{
       document.getElementById('pw').style.display='none';
       document.getElementById('st').textContent='';
-      renderResults(result);
+      document.getElementById('rw').style.display='block';
+
+      const verdict=document.getElementById('verdict');
+      if(pct<=3){
+        verdict.className='verdict v-pass';
+        verdict.textContent='✅ 兩份檔案高度一致，可以送印';
+      } else {
+        verdict.className='verdict v-fail';
+        verdict.textContent=`❌ 發現差異，建議人工確認後再送印`;
+      }
+
+      document.getElementById('stats').innerHTML=`
+        <div class="snum"><span class="n" style="color:${pct>3?'#e74c3c':'#2ecc71'}">${pct}%</span><span class="l">差異比例</span></div>
+        <div class="sdiv"></div>
+        <div class="snum"><span class="n" style="color:#f39c12">${diffBlocks}</span><span class="l">差異區塊數</span></div>
+        <div class="sdiv"></div>
+        <div class="snum"><span class="n">${totalBlocks}</span><span class="l">總區塊數</span></div>`;
+
+      document.getElementById('hint').innerHTML=
+        pct<=3
+          ? '✅ 差異比例極低，兩份檔案內容一致。'
+          : `⚠️ 紅色區域為差異位置，請對照上方兩張預覽圖確認。差異比例 ${pct}%，${pct>15?'差異明顯，請仔細確認。':'少量差異，可能為字體渲染差異，請人工確認。'}`;
     },300);
 
   }catch(err){
     setErr(err.message);
   }finally{
-    document.getElementById('btn').disabled=false;
-    check();
+    document.getElementById('btn').disabled=false;check();
   }
-}
-
-function renderResults(r){
-  const vMap={pass:{cls:'v-pass',icon:'✅'},fail:{cls:'v-fail',icon:'❌'},warn:{cls:'v-warn',icon:'⚠️'}};
-  const v=vMap[r.verdict]||vMap.warn;
-  const diffs=r.differences||[],warns=r.warnings||[],oks=r.confirmed_match||[];
-  let html=`
-    <div class="verdict ${v.cls}">${v.icon}  ${esc(r.summary)}</div>
-    <div class="counts">
-      <div class="cnum"><span class="n" style="color:#e74c3c">${diffs.length}</span><span class="l">發現差異</span></div>
-      <div class="cdiv"></div>
-      <div class="cnum"><span class="n" style="color:#f39c12">${warns.length}</span><span class="l">待確認</span></div>
-      <div class="cdiv"></div>
-      <div class="cnum"><span class="n" style="color:#2ecc71">${oks.length}</span><span class="l">確認一致</span></div>
-    </div>`;
-  if(diffs.length){
-    html+=`<div class="sec-head"><span>⚠ 發現差異</span></div>`;
-    html+=diffs.map(d=>`<div class="item diff"><span class="item-field">${d.severity==='high'?'🔴':d.severity==='medium'?'🟠':'🟡'} ${esc(d.field)}</span><div class="diff-cols"><div class="diff-col"><div class="diff-col-lbl">EPS</div>${esc(d.eps_value||'—')}</div><div class="diff-col"><div class="diff-col-lbl">PDF</div>${esc(d.pdf_value||'—')}</div></div></div>`).join('');
-  }
-  if(warns.length){
-    html+=`<div class="sec-head"><span>❓ 待人工確認</span></div>`;
-    html+=warns.map(w=>`<div class="item warn"><span class="item-field">❓ ${esc(w.field)}</span><div>${esc(w.reason)}</div>${w.suggestion?`<div style="margin-top:4px;font-size:.73rem;color:#92400e">💡 ${esc(w.suggestion)}</div>`:''}</div>`).join('');
-  }
-  if(oks.length){
-    html+=`<div class="sec-head"><span>✓ 確認一致</span></div>`;
-    html+=oks.slice(0,20).map(o=>`<div class="item ok"><span class="item-field">✓ ${esc(o.field)}</span><div>${esc(o.value)}</div></div>`).join('');
-  }
-  if(r.notes) html+=`<div class="sec-head"><span>📝 備註</span></div><div class="item">${esc(r.notes)}</div>`;
-  document.getElementById('results').innerHTML=html;
 }
 </script>
 </body>
