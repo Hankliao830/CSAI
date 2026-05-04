@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPS × PDF 校稿工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<style>
+  :root{--ink:#1a1410;--paper:#f5f0e8;--gold:#b8860b;--gl:#d4a843;--red:#c0392b;--green:#2d6a4f;--amber:#d97706;--border:#c8b89a;--card:#fdfaf4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Noto Serif TC',serif,sans-serif;min-height:100vh}
+  header{text-align:center;padding:32px 20px 22px;border-bottom:2px solid var(--border)}
+  header::after{content:'';display:block;width:60px;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:12px auto 0}
+  h1{font-size:1.5rem;font-weight:600;letter-spacing:.1em}
+  h1 span{color:var(--gold)}
+  .sub{font-size:.76rem;color:#7a6a5a;margin-top:6px}
+  .wrap{max-width:680px;margin:0 auto;padding:24px 16px 60px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  .zone{display:block;background:var(--card);border:2px dashed var(--border);border-radius:6px;padding:22px 14px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+  .zone:hover,.zone.drag{border-color:var(--gold);background:#fefcf5}
+  .zone.done{border-style:solid;border-color:var(--green);background:#f0faf4}
+  .zone .bar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--green),#52b788,var(--green));opacity:0;transition:opacity .2s}
+  .zone.done .bar{opacity:1}
+  .zone-icon{font-size:1.8rem;margin-bottom:6px}
+  .zone-label{font-size:.82rem;font-weight:600;color:var(--gold);letter-spacing:.08em}
+  .zone-hint{font-size:.68rem;color:#9a8a7a;margin-top:3px}
+  .zone-name{font-size:.68rem;font-family:monospace;color:var(--green);margin-top:6px;word-break:break-all}
+  input[type=file]{display:none}
+
+  .btn{display:block;width:100%;padding:14px;background:var(--ink);color:var(--gl);border:none;border-radius:4px;font-size:.9rem;font-weight:600;letter-spacing:.16em;cursor:pointer;font-family:inherit;margin-bottom:20px;transition:all .2s}
+  .btn:disabled{background:#c8b89a;color:#f5f0e8;cursor:not-allowed}
+
+  .prog-wrap{background:#e8dfc8;border-radius:2px;height:4px;margin-bottom:8px;overflow:hidden;display:none}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gl));width:0%;transition:width .3s}
+  .status{text-align:center;font-size:.8rem;color:#7a6a5a;margin-bottom:14px;min-height:18px}
+  .status.err{color:var(--red)}
+
+  .previews{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .pbox{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+  .ptitle{background:var(--ink);color:var(--gl);font-size:.7rem;font-weight:600;letter-spacing:.1em;padding:6px 12px}
+  .pimg{width:100%;height:160px;object-fit:contain;background:#1a1410;display:block}
+
+  .verdict{text-align:center;padding:13px;border-radius:4px;margin-bottom:16px;font-weight:600;font-size:.88rem;letter-spacing:.06em}
+  .v-pass{background:#d1fae5;color:var(--green);border:1px solid #6ee7b7}
+  .v-warn{background:#fef3c7;color:var(--amber);border:1px solid #fcd34d}
+  .v-fail{background:#fee2e2;color:var(--red);border:1px solid #fca5a5}
+
+  .counts{background:var(--ink);color:var(--paper);border-radius:4px;padding:14px 18px;margin-bottom:20px;display:flex;gap:16px;justify-content:center;align-items:center}
+  .cnum{text-align:center}
+  .cnum .n{font-size:1.6rem;font-weight:600;display:block;line-height:1}
+  .cnum .l{font-size:.66rem;letter-spacing:.08em;color:#c8b89a;margin-top:2px}
+  .cdiv{width:1px;height:30px;background:rgba(255,255,255,.15)}
+
+  .sec-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;margin-top:18px}
+  .sec-head span{font-size:.7rem;font-weight:600;letter-spacing:.12em;color:#9a8a7a;white-space:nowrap}
+  .sec-head::after{content:'';flex:1;height:1px;background:var(--border)}
+
+  .item{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--border);border-radius:0 4px 4px 0;padding:11px 14px;margin-bottom:8px;font-size:.84rem;line-height:1.7}
+  .item.diff{border-left-color:var(--red);background:#fff8f8}
+  .item.warn{border-left-color:var(--amber);background:#fffbf0}
+  .item.ok{border-left-color:var(--green);background:#f0faf4}
+  .item-field{font-weight:600;font-size:.72rem;color:#5a4a3a;display:block;margin-bottom:3px}
+  .diff-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+  .diff-col{background:rgba(0,0,0,.05);border-radius:2px;padding:6px 9px;font-size:.75rem;font-family:monospace}
+  .diff-col-lbl{font-size:.63rem;font-weight:600;color:#7a6a5a;margin-bottom:2px;font-family:inherit}
+
+  .empty{text-align:center;padding:36px 20px;color:#9a8a7a;font-size:.84rem}
+  .empty .ico{font-size:2.4rem;display:block;margin-bottom:10px;opacity:.3}
+
+  @media(max-width:480px){.grid2,.previews,.diff-cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>EPS <span>×</span> PDF 校稿工具</h1>
+  <p class="sub">離線運作 · 不需網路 · 不需 API Key</p>
+</header>
+
+<div class="wrap">
+  <div class="grid2">
+    <label class="zone" id="ez" for="ei">
+      <div class="bar"></div>
+      <div class="zone-icon">📐</div>
+      <div class="zone-label">EPS 原始稿</div>
+      <div class="zone-hint">點擊選擇 .eps</div>
+      <div class="zone-name" id="en"></div>
+      <input type="file" id="ei" accept=".eps,application/postscript">
+    </label>
+    <label class="zone" id="pz" for="pi">
+      <div class="bar"></div>
+      <div class="zone-icon">📄</div>
+      <div class="zone-label">PDF 校稿稿</div>
+      <div class="zone-hint">點擊選擇 .pdf</div>
+      <div class="zone-name" id="pn"></div>
+      <input type="file" id="pi" accept=".pdf,application/pdf">
+    </label>
+  </div>
+
+  <div class="prog-wrap" id="pw"><div class="prog-fill" id="pf"></div></div>
+  <div class="status" id="st"></div>
+  <button class="btn" id="btn" disabled onclick="run()">▶ 開始比對校稿</button>
+
+  <div class="previews" id="prevs" style="display:none">
+    <div class="pbox"><div class="ptitle">EPS 預覽</div><canvas class="pimg" id="epc"></canvas></div>
+    <div class="pbox"><div class="ptitle">PDF 預覽</div><canvas class="pimg" id="ppc"></canvas></div>
+  </div>
+
+  <div id="results"></div>
+  <div class="empty" id="empty"><span class="ico">🔍</span>上傳兩份檔案後點擊比對</div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let epsFile=null, pdfFile=null;
+
+function setup(inputId,zoneId,nameId,type){
+  const inp=document.getElementById(inputId);
+  const zone=document.getElementById(zoneId);
+  const nameEl=document.getElementById(nameId);
+  inp.addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f)return;
+    if(type==='eps')epsFile=f; else pdfFile=f;
+    nameEl.textContent=f.name+' ('+(f.size/1024).toFixed(0)+'KB)';
+    zone.classList.add('done');
+    check();
+  });
+}
+setup('ei','ez','en','eps');
+setup('pi','pz','pn','pdf');
+function check(){ document.getElementById('btn').disabled=!(epsFile&&pdfFile); }
+
+function setP(pct,txt){ 
+  document.getElementById('pw').style.display='block';
+  document.getElementById('pf').style.width=pct+'%';
+  if(txt!==undefined){ const s=document.getElementById('st'); s.textContent=txt; s.className='status'; }
+}
+function setErr(txt){ const s=document.getElementById('st'); s.textContent='❌ '+txt; s.className='status err'; document.getElementById('pw').style.display='none'; }
+
+// Render PDF page to canvas, return imageData
+async function renderPDF(file, canvas){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const page=await pdf.getPage(1);
+  const vp=page.getViewport({scale:2});
+  canvas.width=vp.width; canvas.height=vp.height;
+  canvas.style.height='160px'; canvas.style.objectFit='contain';
+  await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+  return canvas;
+}
+
+// Extract TIFF preview from binary EPS, draw to canvas
+async function renderEPS(file, canvas){
+  const buf=await file.arrayBuffer();
+  const v=new DataView(buf);
+  // Binary EPS magic: C5 D0 D3 C6
+  if(v.getUint8(0)===0xC5&&v.getUint8(1)===0xD0&&v.getUint8(2)===0xD3&&v.getUint8(3)===0xC6){
+    const pairs=[[v.getUint32(12,true),v.getUint32(16,true)],[v.getUint32(20,true),v.getUint32(24,true)]];
+    for(const[off,len]of pairs){
+      if(len<100)continue;
+      const bytes=new Uint8Array(buf,off,len);
+      if(bytes[0]===0x49&&bytes[1]===0x49){ // TIFF LE
+        const blob=new Blob([bytes],{type:'image/tiff'});
+        const url=URL.createObjectURL(blob);
+        const ok=await new Promise(r=>{
+          const img=new Image();
+          img.onload=()=>{
+            canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
+            canvas.style.height='160px';
+            canvas.getContext('2d').drawImage(img,0,0);
+            URL.revokeObjectURL(url); r(true);
+          };
+          img.onerror=()=>{URL.revokeObjectURL(url);r(false);};
+          img.src=url;
+        });
+        if(ok)return canvas;
+      }
+    }
+  }
+  // Fallback: blank canvas with text
+  canvas.width=300; canvas.height=160;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#1a1410'; ctx.fillRect(0,0,300,160);
+  ctx.fillStyle='#b8860b'; ctx.font='13px serif'; ctx.textAlign='center';
+  ctx.fillText('EPS 向量檔',150,70);
+  ctx.fillStyle='#c8b89a'; ctx.font='10px serif';
+  ctx.fillText('（瀏覽器無法直接預覽）',150,90);
+  return canvas;
+}
+
+// OCR a canvas
+async function ocr(canvas, label){
+  setP(undefined, `OCR 辨識${label}文字中...`);
+  const result=await Tesseract.recognize(canvas,['chi_tra','eng'],{
+    logger: m=>{ if(m.status==='recognizing text') setP(undefined,`OCR ${label}：${Math.round(m.progress*100)}%`); }
+  });
+  return result.data.text;
+}
+
+// Simple diff: find lines in A not in B and vice versa
+function diffTexts(epsText, pdfText){
+  const clean=t=>t.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
+  const epsLines=clean(epsText);
+  const pdfLines=clean(pdfText);
+
+  const warnings=[];
+  const confirmed=[];
+  const differences=[];
+
+  // Check each PDF line against EPS
+  for(const line of pdfLines){
+    // Look for similar line in EPS (fuzzy: contains or contained)
+    const match=epsLines.find(el=>
+      el.includes(line)||line.includes(el)||
+      similarity(el,line)>0.75
+    );
+    if(match){
+      if(match===line) confirmed.push({field:'文字行',value:line.slice(0,60)});
+      else differences.push({field:'文字差異',pdf_value:line.slice(0,60),eps_value:match.slice(0,60),severity:'medium'});
+    } else {
+      warnings.push({field:'PDF 中有，EPS 未確認',reason:line.slice(0,80),suggestion:'請人工對照 EPS 確認此行'});
+    }
+  }
+
+  // Lines in EPS not in PDF
+  for(const line of epsLines){
+    const match=pdfLines.find(pl=>pl.includes(line)||line.includes(pl)||similarity(pl,line)>0.75);
+    if(!match) differences.push({field:'EPS 獨有文字',eps_value:line.slice(0,60),pdf_value:'（PDF 中未找到）',severity:'high'});
+  }
+
+  const verdict=differences.filter(d=>d.severity==='high').length>0?'fail':
+    differences.length>0||warnings.length>0?'warn':'pass';
+
+  return {
+    verdict,
+    summary: verdict==='pass'?'兩份檔案文字內容一致':
+      verdict==='fail'?`發現 ${differences.length} 處差異，請確認後再送印`:
+      `發現 ${differences.length} 處差異、${warnings.length} 項待確認`,
+    differences, warnings, confirmed,
+    epsText, pdfText
+  };
+}
+
+// Simple string similarity (0~1)
+function similarity(a,b){
+  if(!a||!b)return 0;
+  const longer=a.length>b.length?a:b;
+  const shorter=a.length>b.length?b:a;
+  if(longer.length===0)return 1;
+  const costs=[];
+  for(let i=0;i<=longer.length;i++){
+    let lastVal=i;
+    for(let j=0;j<=shorter.length;j++){
+      if(i===0)costs[j]=j;
+      else if(j>0){
+        let newVal=costs[j-1];
+        if(longer[i-1]!==shorter[j-1]) newVal=Math.min(Math.min(newVal,lastVal),costs[j])+1;
+        costs[j-1]=lastVal; lastVal=newVal;
+      }
+    }
+    if(i>0)costs[shorter.length]=lastVal;
+  }
+  return (longer.length-costs[shorter.length])/longer.length;
+}
+
+async function run(){
+  if(!epsFile||!pdfFile)return;
+  document.getElementById('btn').disabled=true;
+  document.getElementById('results').innerHTML='';
+  document.getElementById('empty').style.display='none';
+  document.getElementById('prevs').style.display='grid';
+
+  try{
+    setP(5,'渲染 PDF...');
+    const pdfCanvas=document.getElementById('ppc');
+    await renderPDF(pdfFile,pdfCanvas);
+
+    setP(20,'渲染 EPS...');
+    const epsCanvas=document.getElementById('epc');
+    await renderEPS(epsFile,epsCanvas);
+
+    setP(35,'OCR 辨識 PDF 文字...');
+    const pdfText=await ocr(pdfCanvas,'PDF');
+
+    setP(60,'OCR 辨識 EPS 文字...');
+    const epsText=await ocr(epsCanvas,'EPS');
+
+    setP(90,'比對差異...');
+    const result=diffTexts(epsText,pdfText);
+
+    setP(100,'完成！');
+    setTimeout(()=>{
+      document.getElementById('pw').style.display='none';
+      document.getElementById('st').textContent='';
+      renderResults(result);
+    },300);
+
+  }catch(err){
+    setErr(err.message);
+  }finally{
+    document.getElementById('btn').disabled=false;
+    check();
+  }
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderResults(r){
+  const vMap={pass:{cls:'v-pass',icon:'✅'},fail:{cls:'v-fail',icon:'❌'},warn:{cls:'v-warn',icon:'⚠️'}};
+  const v=vMap[r.verdict]||vMap.warn;
+  const diffs=r.differences||[], warns=r.warnings||[], oks=r.confirmed||[];
+
+  let html=`
+    <div class="verdict ${v.cls}">${v.icon}  ${esc(r.summary)}</div>
+    <div class="counts">
+      <div class="cnum"><span class="n" style="color:#e74c3c">${diffs.length}</span><span class="l">發現差異</span></div>
+      <div class="cdiv"></div>
+      <div class="cnum"><span class="n" style="color:#f39c12">${warns.length}</span><span class="l">待確認</span></div>
+      <div class="cdiv"></div>
+      <div class="cnum"><span class="n" style="color:#2ecc71">${oks.length}</span><span class="l">確認一致</span></div>
+    </div>`;
+
+  if(diffs.length){
+    html+=`<div class="sec-head"><span>⚠ 發現差異</span></div>`;
+    html+=diffs.map(d=>`
+      <div class="item diff">
+        <span class="item-field">${d.severity==='high'?'🔴':d.severity==='medium'?'🟠':'🟡'} ${esc(d.field)}</span>
+        <div class="diff-cols">
+          <div class="diff-col"><div class="diff-col-lbl">EPS</div>${esc(d.eps_value||'—')}</div>
+          <div class="diff-col"><div class="diff-col-lbl">PDF</div>${esc(d.pdf_value||'—')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  if(warns.length){
+    html+=`<div class="sec-head"><span>❓ 待人工確認</span></div>`;
+    html+=warns.slice(0,30).map(w=>`
+      <div class="item warn">
+        <span class="item-field">❓ ${esc(w.field)}</span>
+        <div>${esc(w.reason)}</div>
+        ${w.suggestion?`<div style="margin-top:4px;font-size:.73rem;color:#92400e">💡 ${esc(w.suggestion)}</div>`:''}
+      </div>`).join('');
+    if(warns.length>30) html+=`<div class="item warn"><span class="item-field">...還有 ${warns.length-30} 項</span></div>`;
+  }
+
+  if(oks.length){
+    html+=`<div class="sec-head"><span>✓ 確認一致</span></div>`;
+    html+=oks.slice(0,20).map(o=>`
+      <div class="item ok"><span class="item-field">✓ ${esc(o.field)}</span><div>${esc(o.value)}</div></div>`).join('');
+  }
+
+  // Raw OCR text
+  html+=`<div class="sec-head"><span>📄 EPS OCR 原文</span></div>
+    <div class="item" style="font-size:.75rem;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto">${esc(r.epsText)}</div>
+    <div class="sec-head"><span>📄 PDF OCR 原文</span></div>
+    <div class="item" style="font-size:.75rem;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto">${esc(r.pdfText)}</div>`;
+
+  document.getElementById('results').innerHTML=html;
+}
+</script>
+</body>
+</html>
