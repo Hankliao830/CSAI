@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPS 轉圖檔</title>
+<style>
+  :root{--ink:#1a1410;--paper:#f5f0e8;--gold:#b8860b;--gl:#d4a843;--green:#2d6a4f;--border:#c8b89a;--card:#fdfaf4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:sans-serif;min-height:100vh}
+  header{text-align:center;padding:40px 20px 24px;border-bottom:2px solid var(--border)}
+  header::after{content:'';display:block;width:60px;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:12px auto 0}
+  h1{font-size:1.5rem;font-weight:600;letter-spacing:.1em}
+  h1 span{color:var(--gold)}
+  .sub{font-size:.78rem;color:#7a6a5a;margin-top:6px}
+  .wrap{max-width:480px;margin:0 auto;padding:32px 16px 60px}
+  .zone{display:block;background:var(--card);border:2px dashed var(--border);border-radius:8px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;margin-bottom:16px}
+  .zone:hover{border-color:var(--gold);background:#fefcf5}
+  .zone.done{border-style:solid;border-color:var(--green);background:#f0faf4}
+  .zone .bar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--green),#52b788,var(--green));opacity:0;transition:.2s}
+  .zone.done .bar{opacity:1}
+  .icon{font-size:2.5rem;margin-bottom:10px}
+  .label{font-size:.9rem;font-weight:600;color:var(--gold);letter-spacing:.08em}
+  .hint{font-size:.72rem;color:#9a8a7a;margin-top:4px}
+  .fname{font-size:.72rem;font-family:monospace;color:var(--green);margin-top:8px;word-break:break-all}
+  input[type=file]{display:none}
+  .btn{display:block;width:100%;padding:15px;background:var(--ink);color:var(--gl);border:none;border-radius:4px;font-size:.95rem;font-weight:600;letter-spacing:.16em;cursor:pointer;font-family:inherit;margin-bottom:20px;transition:.2s}
+  .btn:disabled{background:#c8b89a;color:#f5f0e8;cursor:not-allowed}
+  .prog-wrap{background:#e8dfc8;border-radius:2px;height:5px;margin-bottom:10px;overflow:hidden;display:none}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gl));width:0%;transition:width .4s}
+  .status{text-align:center;font-size:.82rem;color:#7a6a5a;margin-bottom:16px;min-height:20px;line-height:1.6}
+  .status.err{color:#c0392b}
+  .preview{display:none;margin-bottom:20px}
+  .preview img{width:100%;border-radius:4px;border:1px solid var(--border);display:block}
+  .dl-btn{display:block;width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:4px;font-size:.95rem;font-weight:600;letter-spacing:.1em;cursor:pointer;font-family:inherit;text-align:center;text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>EPS <span>→</span> PNG 轉換</h1>
+  <p class="sub">上傳 EPS，下載高解析度 PNG</p>
+</header>
+<div class="wrap">
+  <label class="zone" id="zone" for="fi">
+    <div class="bar"></div>
+    <div class="icon">📐</div>
+    <div class="label">點擊選擇 EPS 檔案</div>
+    <div class="hint">或拖曳到這裡</div>
+    <div class="fname" id="fname"></div>
+    <input type="file" id="fi" accept=".eps,application/postscript">
+  </label>
+
+  <div class="prog-wrap" id="pw"><div class="prog-fill" id="pf"></div></div>
+  <div class="status" id="st"></div>
+
+  <button class="btn" id="btn" disabled onclick="convert()">▶ 開始轉換</button>
+
+  <div class="preview" id="prev">
+    <img id="pimg" src="" alt="preview">
+  </div>
+  <a class="dl-btn" id="dlbtn" style="display:none" download="output.png">⬇ 下載 PNG</a>
+</div>
+
+<script>
+const CC_KEY='eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNGZlMGZmNjg1OTg2MjVhNzhiOWYxYzAwZTZhMGVjMDhlZjliNzU0ZjM3NjY4ODkyOTAyN2QzNDhhMjZkOTAxMTYyYThlMmI3ZmJmMjQ4MjMiLCJpYXQiOjE3Nzc4OTkxODAuNTAwOTgzLCJuYmYiOjE3Nzc4OTkxODAuNTAwOTg1LCJleHAiOjQ5MzM1NzI3ODAuNDkzNTg4LCJzdWIiOiI3NTM5ODYyNSIsInNjb3BlcyI6WyJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIl19.RP7R-vPvJbvZvB0dJdH6ZEbIgtRVtN9LmCxIrEop3e6Sc56pzF0gHKqoscuL6P88FNOkUBzA-v168k6QT5kQMtq7K3DY-pHiPWdxGwEjzzIoZN2pIy7aVFVWXB-AzQpnmGuH-pZ5W0SLlXHX566KezZCwU7awkxahZt8y2DUF929JEbK-RrVW9UhHdb1jdz85q2kTypEWZQ9Zk9hO6HTnFekR5hbN4wzc3pMDHXiG_mL7R30gnnrFDjvwYAItUIB46NVTpqnKkOLcSmZT6_mNJ7Q9tcte77McQ2lcrVhoVRpNRS4FVfbvPKlSwf3Esc8CjXNDclTk206kO1Xav2F4LC-Umvpp2umK4GX14fXTMdZrUSduxWfV-Zk8pr_TP1aqNKjTnaxaxmbVh_UIxLzaTyS5vfA4aDWpAV2vQJvDIj10or1HnATfoyVH_qlvOzy5KeLOPTdzvgJD1vU-FlU4-oB3zQqAsyyMtP2gCOt0ihd9G9AAdrbEB1_O43CVrlrQIpgzywzDXqSpyqeBM42zyfZg1SEmVss2mHk9nqKLcXopZP_Cc19IKWNT1INfRbDX-joON5tmRQVE6x35jfVhGx7qlJcEPWk_RjdqehSmhCLX9qCdA9VwJSd-H6kB02cjFlFU5uy1enf4lp5UeGuep3n5b0rxq80PCZZfz2UXoo';
+
+let epsFile=null;
+
+const zone=document.getElementById('zone');
+const inp=document.getElementById('fi');
+
+inp.addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  epsFile=f;
+  document.getElementById('fname').textContent=f.name+' ('+(f.size/1024).toFixed(0)+'KB)';
+  zone.classList.add('done');
+  document.getElementById('btn').disabled=false;
+});
+
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.style.borderColor='var(--gold)';});
+zone.addEventListener('dragleave',()=>{zone.style.borderColor='';});
+zone.addEventListener('drop',e=>{
+  e.preventDefault();zone.style.borderColor='';
+  const f=e.dataTransfer.files[0];if(!f)return;
+  epsFile=f;
+  document.getElementById('fname').textContent=f.name+' ('+(f.size/1024).toFixed(0)+'KB)';
+  zone.classList.add('done');
+  document.getElementById('btn').disabled=false;
+});
+
+function setP(pct,txt){
+  document.getElementById('pw').style.display='block';
+  document.getElementById('pf').style.width=pct+'%';
+  if(txt!==undefined){const s=document.getElementById('st');s.textContent=txt;s.className='status';}
+}
+function setErr(txt){
+  const s=document.getElementById('st');s.textContent='❌ '+txt;s.className='status err';
+  document.getElementById('pw').style.display='none';
+}
+
+async function convert(){
+  if(!epsFile)return;
+  document.getElementById('btn').disabled=true;
+  document.getElementById('prev').style.display='none';
+  document.getElementById('dlbtn').style.display='none';
+
+  try{
+    setP(10,'建立轉換任務...');
+    const jobResp=await fetch('https://api.cloudconvert.com/v2/jobs',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+CC_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({tasks:{
+        'upload':{operation:'import/upload'},
+        'convert':{operation:'convert',input:'upload',input_format:'eps',output_format:'png',engine:'graphicsmagick',width:3000,density:300},
+        'export':{operation:'export/url',input:'convert'}
+      }})
+    });
+    const job=await jobResp.json();
+    if(!jobResp.ok)throw new Error(job.message||'建立任務失敗');
+
+    setP(20,'上傳 EPS...');
+    const uploadTask=job.data.tasks.find(t=>t.name==='upload');
+    const fd=new FormData();
+    Object.entries(uploadTask.result.form.parameters).forEach(([k,v])=>fd.append(k,v));
+    fd.append('file',epsFile);
+    await fetch(uploadTask.result.form.url,{method:'POST',body:fd});
+
+    setP(35,'轉換中，請稍候...');
+    const jobId=job.data.id;
+    let pngUrl=null;
+    for(let i=0;i<40;i++){
+      await new Promise(r=>setTimeout(r,2000));
+      const s=await(await fetch('https://api.cloudconvert.com/v2/jobs/'+jobId,{
+        headers:{'Authorization':'Bearer '+CC_KEY}
+      })).json();
+      const pct=35+Math.min(i*2,50);
+      setP(pct,'轉換中... '+Math.round((i+1)/40*100)+'%');
+      const exp=s.data.tasks.find(t=>t.name==='export');
+      if(exp?.status==='finished'){pngUrl=exp.result.files[0].url;break;}
+      if(s.data.status==='error')throw new Error('轉換失敗，請重試');
+    }
+    if(!pngUrl)throw new Error('轉換逾時');
+
+    setP(90,'下載圖片...');
+    const fname=epsFile.name.replace(/\.eps$/i,'')+'.png';
+    const dlBtn=document.getElementById('dlbtn');
+    dlBtn.href=pngUrl;
+    dlBtn.download=fname;
+    dlBtn.style.display='block';
+
+    document.getElementById('pimg').src=pngUrl;
+    document.getElementById('prev').style.display='block';
+
+    setP(100,'完成！');
+    document.getElementById('st').textContent='✅ 轉換完成，點下方按鈕下載';
+    document.getElementById('st').className='status';
+
+  }catch(err){
+    setErr(err.message);
+  }finally{
+    document.getElementById('btn').disabled=false;
+  }
+}
+</script>
+</body>
+</html>
