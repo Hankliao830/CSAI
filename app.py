@@ -3,14 +3,13 @@ import subprocess
 import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pytesseract
-from PIL import Image
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF - can do OCR itself with its own engine
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 def eps_to_image(eps_path):
+    """Convert EPS to PNG using Ghostscript"""
     out_path = eps_path + '.png'
     result = subprocess.run([
         'gs', '-dNOPAUSE', '-dBATCH', '-dSAFER',
@@ -22,20 +21,37 @@ def eps_to_image(eps_path):
         raise Exception('Ghostscript error: ' + result.stderr[:200])
     return out_path
 
-def pdf_to_image(pdf_path):
+def pdf_to_text(pdf_path):
+    """Extract text directly from PDF using PyMuPDF"""
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    doc.close()
+    return text
+
+def pdf_to_image_text(pdf_path):
+    """Render PDF page and extract text blocks"""
     doc = fitz.open(pdf_path)
     page = doc[0]
-    mat = fitz.Matrix(2, 2)
-    pix = page.get_pixmap(matrix=mat)
-    out_path = pdf_path + '.png'
-    pix.save(out_path)
+    # Get text with layout
+    blocks = page.get_text("blocks")
+    lines = []
+    for b in blocks:
+        t = b[4].strip()
+        if t:
+            lines.extend(t.split('\n'))
     doc.close()
-    return out_path
+    return '\n'.join(l.strip() for l in lines if l.strip())
 
-def ocr_image(img_path):
-    img = Image.open(img_path)
-    text = pytesseract.image_to_string(img, lang='chi_tra+eng')
-    return text
+def eps_to_text_via_gs(eps_path):
+    """Extract text from EPS using Ghostscript ps2ascii"""
+    result = subprocess.run(
+        ['gs', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=txtwrite',
+         '-sOutputFile=-', eps_path],
+        capture_output=True, text=True, errors='replace'
+    )
+    return result.stdout if result.stdout.strip() else ""
 
 def diff_texts(eps_text, pdf_text):
     def clean(t):
@@ -78,8 +94,8 @@ def diff_texts(eps_text, pdf_text):
         'verdict': verdict, 'summary': summary,
         'differences': differences, 'warnings': warnings[:50],
         'confirmed_match': confirmed[:30],
-        'notes': f'EPS OCR {len(eps_lines)} 行，PDF OCR {len(pdf_lines)} 行',
-        'eps_text': eps_text, 'pdf_text': pdf_text
+        'notes': f'EPS 文字 {len(eps_lines)} 行，PDF 文字 {len(pdf_lines)} 行',
+        'eps_text': eps_text[:2000], 'pdf_text': pdf_text[:2000]
     }
 
 @app.route('/health')
@@ -97,16 +113,28 @@ def compare():
         pdf_path = os.path.join(tmpdir, 'input.pdf')
         request.files['eps'].save(eps_path)
         request.files['pdf'].save(pdf_path)
+
+        # Extract text from PDF directly (no OCR needed)
         try:
-            eps_img = eps_to_image(eps_path)
+            pdf_text = pdf_to_image_text(pdf_path)
         except Exception as e:
-            return jsonify({'error': f'EPS 轉換失敗：{str(e)}'}), 500
+            return jsonify({'error': f'PDF 讀取失敗：{str(e)}'}), 500
+
+        # Extract text from EPS using Ghostscript txtwrite
         try:
-            pdf_img = pdf_to_image(pdf_path)
+            eps_text = eps_to_text_via_gs(eps_path)
+            if not eps_text.strip():
+                # fallback: try ps2ascii approach
+                result = subprocess.run(
+                    ['gs', '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER',
+                     '-sDEVICE=txtwrite', '-dTextFormat=3',
+                     '-sOutputFile=-', eps_path],
+                    capture_output=True, text=True, errors='replace'
+                )
+                eps_text = result.stdout
         except Exception as e:
-            return jsonify({'error': f'PDF 轉換失敗：{str(e)}'}), 500
-        eps_text = ocr_image(eps_img)
-        pdf_text = ocr_image(pdf_img)
+            return jsonify({'error': f'EPS 讀取失敗：{str(e)}'}), 500
+
         return jsonify(diff_texts(eps_text, pdf_text))
 
 if __name__ == '__main__':
