@@ -183,15 +183,55 @@ async function epsToPNG(file){
   return URL.createObjectURL(pngBlob);
 }
 
-// Render PDF to canvas
+// Render PDF to canvas - auto crop to content area
 async function renderPDF(file){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data:buf}).promise;
   const page = await pdf.getPage(1);
-  const vp = page.getViewport({scale:2});
+  
+  // First render at low res to detect content bounds
+  const vpLow = page.getViewport({scale:1});
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = vpLow.width; tmpCanvas.height = vpLow.height;
+  await page.render({canvasContext:tmpCanvas.getContext('2d'), viewport:vpLow}).promise;
+  
+  // Find content bounding box
+  const ctx = tmpCanvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+  const data = imgData.data;
+  let minX=tmpCanvas.width, maxX=0, minY=tmpCanvas.height, maxY=0;
+  for(let y=0;y<tmpCanvas.height;y++){
+    for(let x=0;x<tmpCanvas.width;x++){
+      const i=(y*tmpCanvas.width+x)*4;
+      // Non-white pixel
+      if(data[i]<240||data[i+1]<240||data[i+2]<240){
+        if(x<minX)minX=x; if(x>maxX)maxX=x;
+        if(y<minY)minY=y; if(y>maxY)maxY=y;
+      }
+    }
+  }
+  
+  // Add padding
+  const pad=10;
+  minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+  maxX=Math.min(tmpCanvas.width,maxX+pad); maxY=Math.min(tmpCanvas.height,maxY+pad);
+  
+  // If content found, render at high res and crop
+  const scale = 4; // High res for OCR
+  const vpHigh = page.getViewport({scale});
+  const fullCanvas = document.createElement('canvas');
+  fullCanvas.width=vpHigh.width; fullCanvas.height=vpHigh.height;
+  await page.render({canvasContext:fullCanvas.getContext('2d'),viewport:vpHigh}).promise;
+  
+  // Crop to content area (scaled)
+  const cropW = (maxX-minX)*scale;
+  const cropH = (maxY-minY)*scale;
   const canvas = document.getElementById('pprev');
-  canvas.width=vp.width; canvas.height=vp.height;
-  await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+  canvas.width = cropW; canvas.height = cropH;
+  canvas.getContext('2d').drawImage(fullCanvas,
+    minX*scale, minY*scale, cropW, cropH,
+    0, 0, cropW, cropH
+  );
   return canvas;
 }
 
